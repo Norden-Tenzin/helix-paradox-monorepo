@@ -7,9 +7,7 @@
   "workers_dev": false,
   "observability": { "enabled": true },
   "vars": {
-    // Public origin of the SvelteKit site. The site proxies /api/* to this worker,
-    // so auth cookies are first-party on this origin.
-    "BETTER_AUTH_URL": "http://localhost:5173"
+    "BETTER_AUTH_URL": "https://helix-paradox-website.nordentenzin29.workers.dev/"
   },
   "d1_databases": [
     {

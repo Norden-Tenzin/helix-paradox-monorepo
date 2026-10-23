@@ -2,6 +2,7 @@ import type { RequestEvent } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
 import { dev } from '$app/env';
 import { API_URL } from '$app/env/private';
+import { env } from 'cloudflare:workers';
 import type { Me } from 'api/types';
 
 /**
@@ -39,9 +40,9 @@ async function callApi(event: RequestEvent, request: Request) {
 		redirect: 'manual'
 	});
 
-	const binding = event.platform?.env?.API;
-	if (binding && !dev) {
-		const response = await binding.fetch(forwarded);
+	// adapter-cloudflare exposes bindings through `cloudflare:workers`, not `event.platform`.
+	if (!dev && env.API) {
+		const response = await env.API.fetch(forwarded);
 		// Re-wrap so headers are mutable further down the chain.
 		return new Response(response.body, response);
 	}
