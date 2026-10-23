@@ -1,0 +1,30 @@
+{
+  "name": "api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy --minify",
+    "gen": "wrangler types",
+    "check": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply helix-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply helix-db --remote",
+    "db:seed:local": "node scripts/seed.mjs && wrangler d1 execute helix-db --local --file=./scripts/seed.sql"
+  },
+  "dependencies": {
+    "better-auth": "^1.7.12",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261022.1",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.151.3"
+  },
+  "exports": {
+    "./types": "./src/types.ts"
+  }
+}

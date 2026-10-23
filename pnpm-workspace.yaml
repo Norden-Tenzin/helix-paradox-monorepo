@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+
+allowBuilds:
+  workerd: true
+  esbuild: true
+  sharp: false

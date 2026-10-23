@@ -1,0 +1,14 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "helix-web",
+	"compatibility_date": "2026-10-23",
+	"compatibility_flags": ["nodejs_als"],
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare"
+	},
+	"observability": { "enabled": true },
+	// /api/* is forwarded to the Hono worker over this binding (see src/hooks.server.ts).
+	"services": [{ "binding": "API", "service": "helix-api" }]
+}

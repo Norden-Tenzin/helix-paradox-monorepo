@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="text-scale" content="scale" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.ico" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Libre+Baskerville:wght@400;700&family=Lora:wght@400;700&display=swap"
+			rel="stylesheet"
+		/>
+		<script>
+			// Follow the OS colour scheme (the old app used next-themes with defaultTheme="system").
+			(() => {
+				const mq = window.matchMedia('(prefers-color-scheme: dark)');
+				const apply = () => document.documentElement.classList.toggle('dark', mq.matches);
+				apply();
+				mq.addEventListener('change', apply);
+			})();
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

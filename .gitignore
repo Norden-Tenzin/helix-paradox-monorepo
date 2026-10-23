@@ -1,0 +1,11 @@
+node_modules
+.DS_Store
+.wrangler
+.dev.vars
+.env
+.env.*
+!.env.example
+.turbo
+
+# The old Next.js app keeps its own git history
+/website
