@@ -10,3 +10,4 @@ node_modules
 # The old Next.js app keeps its own git history
 /website
 .taste-skill
+dist

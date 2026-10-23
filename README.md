@@ -64,7 +64,7 @@ pnpm db:migrate:remote
 pnpm deploy
 
 cd ../web
-pnpm build && wrangler deploy           # binds to the helix-api worker as API
+pnpm build && wrangler deploy           # binds to the helix-paradox-api worker as API
 ```
 
 ## Pictures
