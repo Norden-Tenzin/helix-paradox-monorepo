@@ -8,12 +8,26 @@ import type { Me } from 'api/types';
  * Forwards a request to the Hono API worker. Going through the site's own origin keeps
  * Better Auth cookies first-party, so no CORS or cross-site cookie setup is needed.
  */
+const HOP_BY_HOP = [
+	'host',
+	'connection',
+	'keep-alive',
+	'expect',
+	'te',
+	'trailer',
+	'transfer-encoding',
+	'upgrade',
+	'content-length'
+];
+
 async function callApi(event: RequestEvent, request: Request) {
 	const url = new URL(request.url);
 	const target = new URL(url.pathname + url.search, API_URL);
 
 	const headers = new Headers(request.headers);
-	headers.delete('host');
+	// Hop-by-hop headers describe the client's connection to us, not ours to the API.
+	// (Node's fetch rejects `expect`, which curl sends for large uploads.)
+	for (const name of HOP_BY_HOP) headers.delete(name);
 	headers.set('x-forwarded-host', event.url.host);
 	headers.set('x-forwarded-proto', event.url.protocol.slice(0, -1));
 
@@ -60,7 +74,12 @@ async function getCurrentUser(event: RequestEvent): Promise<Me | null> {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	if (event.url.pathname.startsWith('/api/')) {
-		return callApi(event, event.request);
+		try {
+			return await callApi(event, event.request);
+		} catch (err) {
+			console.error('API proxy failed', err);
+			return Response.json({ error: 'The API is unreachable. Try again in a moment.' }, { status: 502 });
+		}
 	}
 	event.locals.user = await getCurrentUser(event);
 	return resolve(event);

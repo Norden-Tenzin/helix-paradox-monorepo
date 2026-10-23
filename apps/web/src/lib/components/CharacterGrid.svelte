@@ -1,27 +1,28 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { ChevronDown, Search } from '@lucide/svelte';
-	import { DropdownMenu } from 'bits-ui';
-	import { apiErrorMessage, MODS, type CharacterPage, type Sex, type Sort } from '#lib/api.ts';
+	import { Search } from '@lucide/svelte';
+	import { apiErrorMessage, MODS, type CharacterPage, type Sex } from '#lib/api.ts';
 	import { characterListPath, filtersToParams, readFilters, type Filters } from '#lib/filters.ts';
-	import { button, input, menuContent, menuItem } from '#lib/ui.ts';
+	import { button, field } from '#lib/ui.ts';
 	import CharacterCard from './CharacterCard.svelte';
-	import Spinner from './Spinner.svelte';
 
 	let {
 		initial,
 		authorId,
 		isOwner = false,
-		onDelete
+		onDelete,
+		emptyMessage = 'No characters match these filters.'
 	}: {
 		initial: CharacterPage;
 		authorId?: string;
 		isOwner?: boolean;
 		onDelete?: (id: string) => Promise<void>;
+		emptyMessage?: string;
 	} = $props();
 
 	const filters = $derived(readFilters(page.url));
+	const filtered = $derived(!!(filters.sex || filters.mods.length || filters.q));
 
 	// Reset to the server-loaded page whenever the filters (and therefore `initial`) change.
 	let results = $derived(initial.page);
@@ -37,13 +38,11 @@
 		goto(`${page.url.pathname}${query}`, { replace: true, reset: false });
 	}
 
-	const toggleSex = (sex: Sex) => applyFilters({ sex: filters.sex === sex ? undefined : sex });
+	const setSex = (sex: Sex | undefined) => applyFilters({ sex });
 	const toggleMod = (mod: string) =>
 		applyFilters({
 			mods: filters.mods.includes(mod) ? filters.mods.filter((m) => m !== mod) : [...filters.mods, mod]
 		});
-	const setSort = (sort: Sort) => applyFilters({ sort });
-	const handleSearch = () => applyFilters({ q: searchText.trim() });
 
 	async function loadMore() {
 		if (!cursor) return;
@@ -56,7 +55,7 @@
 			results = [...results, ...next.page];
 			cursor = next.nextCursor;
 		} catch (err) {
-			loadError = err instanceof Error ? err.message : 'Failed to load more';
+			loadError = err instanceof Error ? err.message : 'Could not load more characters.';
 		} finally {
 			loadingMore = false;
 		}
@@ -66,103 +65,80 @@
 		await onDelete?.(id);
 		results = results.filter((c) => c.id !== id);
 	}
+
+	const toggle =
+		'h-10 px-4 text-small font-medium transition-colors aria-pressed:bg-ink aria-pressed:text-ground bg-surface text-ink hover:bg-raised';
+	const sexOptions: { label: string; value: Sex | undefined }[] = [
+		{ label: 'Anyone', value: undefined },
+		{ label: 'Women', value: 'female' },
+		{ label: 'Men', value: 'male' }
+	];
 </script>
 
-<!-- Filter/Search bar -->
-<div class="sticky top-12 z-20 flex flex-wrap items-center justify-between gap-2 bg-muted/50 p-2 backdrop-blur">
-	<div class="flex w-full flex-row gap-2">
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger class={button('secondary', 'sm')}>
-				Filters <ChevronDown class="ml-1" />
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Portal>
-				<DropdownMenu.Content align="start" sideOffset={4} class="{menuContent} w-48">
-					<p class="px-3 py-1 text-sm font-bold text-muted-foreground">Sex</p>
-					{#each ['male', 'female'] as const as sex (sex)}
-						<DropdownMenu.CheckboxItem
-							class="{menuItem} pl-8"
-							checked={filters.sex === sex}
-							onCheckedChange={() => toggleSex(sex)}
-							closeOnSelect={false}
-						>
-							{#snippet children({ checked })}
-								<span class="absolute left-2 flex size-3.5 items-center justify-center" aria-hidden="true">{checked ? '✓' : ''}</span>
-								{sex === 'male' ? 'Male' : 'Female'}
-							{/snippet}
-						</DropdownMenu.CheckboxItem>
-					{/each}
-					<p class="mt-2 px-3 py-1 text-sm font-bold text-muted-foreground">Mods</p>
-					{#each MODS as mod (mod)}
-						<DropdownMenu.CheckboxItem
-							class="{menuItem} pl-8"
-							checked={filters.mods.includes(mod)}
-							onCheckedChange={() => toggleMod(mod)}
-							closeOnSelect={false}
-						>
-							{#snippet children({ checked })}
-								<span class="absolute left-2 flex size-3.5 items-center justify-center" aria-hidden="true">{checked ? '✓' : ''}</span>
-								{mod.toUpperCase()}
-							{/snippet}
-						</DropdownMenu.CheckboxItem>
-					{/each}
-				</DropdownMenu.Content>
-			</DropdownMenu.Portal>
-		</DropdownMenu.Root>
-
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger class={button('secondary', 'sm')}>
-				Sort: {filters.sort === 'newest' ? 'Newest' : 'Oldest'} <ChevronDown class="ml-1" />
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Portal>
-				<DropdownMenu.Content align="start" sideOffset={4} class="{menuContent} w-40">
-					<DropdownMenu.Item class={menuItem} onSelect={() => setSort('newest')}>Newest</DropdownMenu.Item>
-					<DropdownMenu.Item class={menuItem} onSelect={() => setSort('oldest')}>Oldest</DropdownMenu.Item>
-				</DropdownMenu.Content>
-			</DropdownMenu.Portal>
-		</DropdownMenu.Root>
-
+<div class="wrap">
+	<!-- Filters: plain toggles, all visible. -->
+	<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 		<form
-			class="flex flex-1 gap-2"
+			class="flex w-full max-w-md"
+			role="search"
 			onsubmit={(e) => {
 				e.preventDefault();
-				handleSearch();
+				applyFilters({ q: searchText.trim() });
 			}}
 		>
-			<input
-				class="{input} h-8"
-				placeholder="Search by name or author..."
-				aria-label="Search"
-				bind:value={searchText}
-			/>
-			<button type="submit" class={button('default', 'sm')} aria-label="Search"><Search /></button>
+			<input class="{field} h-10" placeholder="Search by name or author" aria-label="Search" bind:value={searchText} />
+			<button type="submit" class="{button('solid', 'sm')} w-12 px-0" aria-label="Search"><Search /></button>
 		</form>
-	</div>
-</div>
 
-<!-- Grid -->
-<div class="flex flex-1 justify-center">
+		<div class="flex flex-wrap gap-x-6 gap-y-3">
+			<div class="flex gap-px" role="group" aria-label="Sex">
+				{#each sexOptions as option (option.label)}
+					<button type="button" class={toggle} aria-pressed={filters.sex === option.value} onclick={() => setSex(option.value)}>
+						{option.label}
+					</button>
+				{/each}
+			</div>
+			<div class="flex gap-px" role="group" aria-label="Mods">
+				{#each MODS as mod (mod)}
+					<button type="button" class={toggle} aria-pressed={filters.mods.includes(mod)} onclick={() => toggleMod(mod)}>
+						{mod === 'vanilla' ? 'Vanilla' : mod.toUpperCase()}
+					</button>
+				{/each}
+			</div>
+			<button
+				type="button"
+				class="{toggle} bg-transparent hover:bg-surface"
+				onclick={() => applyFilters({ sort: filters.sort === 'newest' ? 'oldest' : 'newest' })}
+			>
+				{filters.sort === 'newest' ? 'Newest first' : 'Oldest first'}
+			</button>
+		</div>
+	</div>
+
+	<!-- Portraits -->
 	{#if results.length === 0}
-		<p class="mt-8 text-center text-muted-foreground">No characters found.</p>
+		<div class="py-32">
+			<p class="max-w-[28ch] text-lead">{emptyMessage}</p>
+			{#if filtered}
+				<a href={page.url.pathname} class="link mt-4 inline-block text-body">Clear the filters</a>
+			{/if}
+		</div>
 	{:else}
-		<div class="grid w-full max-w-5xl grid-cols-2 content-start gap-3 p-4 sm:grid-cols-4">
+		<div class="grid grid-cols-2 gap-x-4 gap-y-10 pt-10 pb-6 sm:grid-cols-3 sm:gap-x-6 lg:grid-cols-4 xl:grid-cols-5">
 			{#each results as chara (chara.id)}
 				<CharacterCard {chara} {isOwner} onDelete={handleDelete} />
 			{/each}
 		</div>
 	{/if}
-</div>
 
-<!-- Load More -->
-<div class="flex flex-col items-center gap-2 p-4 pb-8">
-	{#if loadError}
-		<p class="text-sm text-destructive">{loadError}</p>
-	{/if}
-	{#if loadingMore}
-		<button disabled class={button('secondary')}>
-			<Spinner class="mr-2 h-4 w-4 border-primary" />
-			Loading...
-		</button>
-	{:else if cursor}
-		<button onclick={loadMore} class={button('secondary')}>Load More</button>
-	{/if}
+	<div class="flex flex-col items-start gap-3 pb-24">
+		{#if loadError}
+			<p class="text-small text-danger">{loadError}</p>
+		{/if}
+		{#if cursor}
+			<button onclick={loadMore} disabled={loadingMore} class={button('quiet')}>
+				{loadingMore ? 'Loading…' : `Show more · ${initial.total - results.length} left`}
+			</button>
+		{/if}
+	</div>
 </div>

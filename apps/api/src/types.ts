@@ -27,6 +27,8 @@ export interface CharacterPage {
   page: Character[];
   /** Pass back as `cursor` to fetch the next page; null when there are no more results. */
   nextCursor: string | null;
+  /** Number of characters matching the filters, across all pages. */
+  total: number;
 }
 
 export interface PublicUser {

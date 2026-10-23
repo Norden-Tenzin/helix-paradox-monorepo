@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { apiErrorMessage } from '#lib/api.ts';
 	import CharacterGrid from '#lib/components/CharacterGrid.svelte';
+	import { button } from '#lib/ui.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -16,27 +17,26 @@
 </script>
 
 <svelte:head>
-	<title>{data.profile.name} · CK3 Helix</title>
+	<title>{data.profile.name} · Helix Paradox</title>
 </svelte:head>
 
-<div class="flex min-h-screen flex-col bg-background">
-	<div class="flex flex-col border-b border-primary bg-card px-4 py-4 shadow-sm">
-		<div class="mx-auto flex w-full max-w-5xl items-center gap-4">
-			<div
-				class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/30 font-sans text-4xl font-bold text-primary uppercase"
-			>
-				{data.profile.name.charAt(0)}
-			</div>
-			<div class="flex flex-col">
-				<h1 class="text-2xl font-bold">{data.profile.name}</h1>
-				<p class="text-sm text-muted-foreground">{count} characters</p>
-			</div>
-		</div>
+<header class="wrap flex flex-col gap-6 pt-16 pb-10 sm:flex-row sm:items-end sm:justify-between sm:pt-24">
+	<div>
+		<h1 class="text-head">{isMyProfile ? 'Your characters' : data.profile.name}</h1>
+		<p class="mt-4 text-body">
+			{#if isMyProfile}Signed in as {data.profile.name}. {/if}{count}
+			{count === 1 ? 'character' : 'characters'} shared.
+		</p>
 	</div>
-	<CharacterGrid
-		initial={data.characters}
-		authorId={data.profile.id}
-		isOwner={isMyProfile}
-		onDelete={handleDelete}
-	/>
-</div>
+	{#if isMyProfile}
+		<a href="/upload" class={button('accent')}>Share a character</a>
+	{/if}
+</header>
+
+<CharacterGrid
+	initial={data.characters}
+	authorId={data.profile.id}
+	isOwner={isMyProfile}
+	onDelete={handleDelete}
+	emptyMessage={isMyProfile ? "You haven't shared a character yet." : 'Nothing shared yet.'}
+/>

@@ -1,160 +1,191 @@
 @import 'tailwindcss';
 
-@custom-variant dark (&:is(.dark *));
+/* Helix Paradox — warm black ground, white ink, one gold accent, one family (Bricolage Grotesque). */
 
 @theme inline {
-	--font-sans: 'Libre Baskerville', serif;
-	--font-serif: 'Lora', serif;
-	--font-mono: 'IBM Plex Mono', monospace;
-	--color-background: var(--background);
-	--color-foreground: var(--foreground);
-	--color-card: var(--card);
-	--color-card-foreground: var(--card-foreground);
-	--color-popover: var(--popover);
-	--color-popover-foreground: var(--popover-foreground);
-	--color-primary: var(--primary);
-	--color-primary-foreground: var(--primary-foreground);
-	--color-secondary: var(--secondary);
-	--color-secondary-foreground: var(--secondary-foreground);
+	--font-sans: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+	--font-code: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; /* taste-skill-ignore: only for literal DNA code */
+	--color-ground: var(--bg);
+	--color-surface: var(--surface);
+	--color-raised: var(--raised);
+	--color-ink: var(--ink);
 	--color-muted: var(--muted);
-	--color-muted-foreground: var(--muted-foreground);
 	--color-accent: var(--accent);
-	--color-accent-foreground: var(--accent-foreground);
-	--color-destructive: var(--destructive);
-	--color-destructive-foreground: var(--destructive-foreground);
-	--color-border: var(--border);
-	--color-input: var(--input);
-	--color-ring: var(--ring);
-	--radius-sm: calc(var(--radius) - 2px);
-	--radius-md: var(--radius);
-	--radius-lg: calc(var(--radius) + 2px);
-	--shadow-sm: var(--shadow-sm);
-	--shadow: var(--shadow);
-	--shadow-md: var(--shadow-md);
-	--shadow-lg: var(--shadow-lg);
-	--shadow-xl: var(--shadow-xl);
-}
-
-@layer base {
-	* {
-		@apply border-border;
-	}
-	body {
-		@apply bg-background text-foreground;
-	}
-	button:not(:disabled),
-	[role='button']:not(:disabled) {
-		cursor: pointer;
-	}
+	--color-accent-ink: var(--accent-ink);
+	--color-danger: var(--danger);
+	--text-small: var(--step-small);
+	--text-body: var(--step-body);
+	--text-lead: var(--step-lead);
+	--text-head: var(--step-head);
 }
 
 :root {
-    --background: oklch(0.9582 0.0152 90.2357);
-    --foreground: oklch(0.3760 0.0225 64.3434);
-    --card: oklch(0.9914 0.0098 87.4695);
-    --card-foreground: oklch(0.3760 0.0225 64.3434);
-    --popover: oklch(0.9914 0.0098 87.4695);
-    --popover-foreground: oklch(0.3760 0.0225 64.3434);
-    --primary: oklch(0.6180 0.0778 65.5444);
-    --primary-foreground: oklch(1.0000 0 0);
-    --secondary: oklch(0.8846 0.0302 85.5655);
-    --secondary-foreground: oklch(0.4313 0.0300 64.9288);
-    --muted: oklch(0.9239 0.0190 83.0636);
-    --muted-foreground: oklch(0.5391 0.0387 71.1655);
-    --accent: oklch(0.8348 0.0426 88.8064);
-    --accent-foreground: oklch(0.3760 0.0225 64.3434);
-    --destructive: oklch(0.5471 0.1438 32.9149);
-    --destructive-foreground: oklch(1.0000 0 0);
-    --border: oklch(0.8606 0.0321 84.5881);
-    --input: oklch(0.8606 0.0321 84.5881);
-    --ring: oklch(0.6180 0.0778 65.5444);
-    --chart-1: oklch(0.6180 0.0778 65.5444);
-    --chart-2: oklch(0.5604 0.0624 68.5805);
-    --chart-3: oklch(0.4851 0.0570 72.6827);
-    --chart-4: oklch(0.6777 0.0624 64.7755);
-    --chart-5: oklch(0.7264 0.0581 66.6967);
-    --radius: 0.25rem;
-    --sidebar: oklch(0.9239 0.0190 83.0636);
-    --sidebar-foreground: oklch(0.3760 0.0225 64.3434);
-    --sidebar-primary: oklch(0.6180 0.0778 65.5444);
-    --sidebar-primary-foreground: oklch(1.0000 0 0);
-    --sidebar-accent: oklch(0.8348 0.0426 88.8064);
-    --sidebar-accent-foreground: oklch(0.3760 0.0225 64.3434);
-    --sidebar-border: oklch(0.8606 0.0321 84.5881);
-    --sidebar-ring: oklch(0.6180 0.0778 65.5444);
-    --font-sans: Libre Baskerville, serif;
-    --font-serif: Lora, serif;
-    --font-mono: IBM Plex Mono, monospace;
-    --shadow-color: hsl(28 13% 20%);
-    --shadow-opacity: 0.12;
-    --shadow-blur: 5px;
-    --shadow-spread: 0px;
-    --shadow-offset-x: 2px;
-    --shadow-offset-y: 3px;
-    --letter-spacing: 0em;
-    --spacing: 0.25rem;
-    --shadow-2xs: 2px 3px 5px 0px hsl(28 13% 20% / 0.06);
-    --shadow-xs: 2px 3px 5px 0px hsl(28 13% 20% / 0.06);
-    --shadow-sm: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 1px 2px -1px hsl(28 13% 20% / 0.12);
-    --shadow: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 1px 2px -1px hsl(28 13% 20% / 0.12);
-    --shadow-md: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 2px 4px -1px hsl(28 13% 20% / 0.12);
-    --shadow-lg: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 4px 6px -1px hsl(28 13% 20% / 0.12);
-    --shadow-xl: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 8px 10px -1px hsl(28 13% 20% / 0.12);
-    --shadow-2xl: 2px 3px 5px 0px hsl(28 13% 20% / 0.30);
-    --tracking-normal: 0em;
+	color-scheme: dark;
+	--bg: #0c0a08;
+	--surface: #181512;
+	--raised: #24201b;
+	--ink: #ffffff;
+	--muted: #a29c94;
+	--accent: #c9a45a;
+	--accent-ink: #0c0a08;
+	--accent-deep: #7d5f22;
+	--danger: #e0705a;
+
+	--step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
+	--step-body: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
+	--step-lead: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
+	--step-head: clamp(2rem, 1.3rem + 3.2vw, 4rem);
+
+	--margin: clamp(1.25rem, 0.9rem + 1.2vw, 2rem);
+	--ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.dark {
-    --background: oklch(0.2747 0.0139 57.6523);
-    --foreground: oklch(0.9239 0.0190 83.0636);
-    --card: oklch(0.3237 0.0155 59.0603);
-    --card-foreground: oklch(0.9239 0.0190 83.0636);
-    --popover: oklch(0.3237 0.0155 59.0603);
-    --popover-foreground: oklch(0.9239 0.0190 83.0636);
-    --primary: oklch(0.7264 0.0581 66.6967);
-    --primary-foreground: oklch(0.2747 0.0139 57.6523);
-    --secondary: oklch(0.3795 0.0181 57.1280);
-    --secondary-foreground: oklch(0.9239 0.0190 83.0636);
-    --muted: oklch(0.2939 0.0125 62.1298);
-    --muted-foreground: oklch(0.7982 0.0243 82.1078);
-    --accent: oklch(0.4186 0.0281 56.3404);
-    --accent-foreground: oklch(0.9239 0.0190 83.0636);
-    --destructive: oklch(0.5471 0.1438 32.9149);
-    --destructive-foreground: oklch(1.0000 0 0);
-    --border: oklch(0.3795 0.0181 57.1280);
-    --input: oklch(0.3795 0.0181 57.1280);
-    --ring: oklch(0.7264 0.0581 66.6967);
-    --chart-1: oklch(0.7264 0.0581 66.6967);
-    --chart-2: oklch(0.6777 0.0624 64.7755);
-    --chart-3: oklch(0.6180 0.0778 65.5444);
-    --chart-4: oklch(0.5604 0.0624 68.5805);
-    --chart-5: oklch(0.4851 0.0570 72.6827);
-    --radius: 0.25rem;
-    --sidebar: oklch(0.2747 0.0139 57.6523);
-    --sidebar-foreground: oklch(0.9239 0.0190 83.0636);
-    --sidebar-primary: oklch(0.7264 0.0581 66.6967);
-    --sidebar-primary-foreground: oklch(0.2747 0.0139 57.6523);
-    --sidebar-accent: oklch(0.4186 0.0281 56.3404);
-    --sidebar-accent-foreground: oklch(0.9239 0.0190 83.0636);
-    --sidebar-border: oklch(0.3795 0.0181 57.1280);
-    --sidebar-ring: oklch(0.7264 0.0581 66.6967);
-    --font-sans: Libre Baskerville, serif;
-    --font-serif: Lora, serif;
-    --font-mono: IBM Plex Mono, monospace;
-    --shadow-color: hsl(28 13% 20%);
-    --shadow-opacity: 0.12;
-    --shadow-blur: 5px;
-    --shadow-spread: 0px;
-    --shadow-offset-x: 2px;
-    --shadow-offset-y: 3px;
-    --letter-spacing: 0em;
-    --spacing: 0.25rem;
-    --shadow-2xs: 2px 3px 5px 0px hsl(28 13% 20% / 0.06);
-    --shadow-xs: 2px 3px 5px 0px hsl(28 13% 20% / 0.06);
-    --shadow-sm: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 1px 2px -1px hsl(28 13% 20% / 0.12);
-    --shadow: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 1px 2px -1px hsl(28 13% 20% / 0.12);
-    --shadow-md: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 2px 4px -1px hsl(28 13% 20% / 0.12);
-    --shadow-lg: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 4px 6px -1px hsl(28 13% 20% / 0.12);
-    --shadow-xl: 2px 3px 5px 0px hsl(28 13% 20% / 0.12), 2px 8px 10px -1px hsl(28 13% 20% / 0.12);
-    --shadow-2xl: 2px 3px 5px 0px hsl(28 13% 20% / 0.30);
+@layer base {
+	html {
+		background: var(--bg);
+		scroll-behavior: smooth;
+	}
+	body {
+		background: var(--bg);
+		color: var(--ink);
+		font-family: var(--font-sans);
+		font-size: var(--step-body);
+		line-height: 1.5;
+		font-optical-sizing: auto;
+		-webkit-font-smoothing: antialiased;
+	}
+	h1,
+	h2,
+	h3 {
+		font-weight: 600;
+		letter-spacing: -0.03em;
+		line-height: 1;
+		text-wrap: balance;
+	}
+	p {
+		text-wrap: pretty;
+	}
+	::selection {
+		background: var(--accent);
+		color: var(--accent-ink);
+	}
+	:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 3px;
+	}
+	button:not(:disabled),
+	[role='button']:not(:disabled),
+	label[for] {
+		cursor: pointer;
+	}
+	pre,
+	code {
+		font-family: var(--font-code);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		html {
+			scroll-behavior: auto;
+		}
+	}
+}
+
+@layer components {
+	/* The page's one horizontal measure: tight margins, large things run to the edges. */
+	.wrap {
+		padding-inline: var(--margin);
+	}
+
+	/* The name, set as architecture. Sized so "Helix Paradox" fills the width on one line. */
+	.monument {
+		font-weight: 600;
+		font-size: clamp(3.5rem, 18.6vw, 24rem);
+		letter-spacing: -0.055em;
+		line-height: 0.82;
+		white-space: nowrap;
+		font-variation-settings: 'opsz' 96;
+	}
+
+	.link {
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 0.22em;
+		text-decoration-color: color-mix(in oklab, currentColor 45%, transparent);
+		transition: text-decoration-color 200ms var(--ease-out), color 200ms var(--ease-out);
+	}
+	.link:hover {
+		text-decoration-color: currentColor;
+	}
+}
+
+/* ---------- Motion ---------- */
+
+/* Section entrances: parts rise in, staggered. Content is visible without script (see reveal.ts). */
+.js [data-reveal] {
+	opacity: 0;
+	translate: 0 24px;
+	transition:
+		opacity 700ms var(--ease-out),
+		translate 700ms var(--ease-out);
+	transition-delay: calc(var(--i, 0) * 80ms);
+}
+.js [data-reveal].is-in {
+	opacity: 1;
+	translate: 0 0;
+}
+
+/* Signature move: the monument settles as the hero scrolls away, and grows into place in the footer. */
+@supports (animation-timeline: view()) {
+	.monument-scroll {
+		transform-origin: 0% 100%;
+		animation: monument-settle linear both;
+		animation-timeline: view();
+		animation-range: exit 0% exit 100%;
+	}
+	.monument-arrive {
+		transform-origin: 0% 100%;
+		animation: monument-arrive linear both;
+		animation-timeline: view();
+		animation-range: entry 0% entry 100%;
+	}
+}
+@keyframes monument-settle {
+	to {
+		scale: 0.93;
+		opacity: 0.55;
+	}
+}
+@keyframes monument-arrive {
+	from {
+		scale: 0.94;
+	}
+	to {
+		scale: 1;
+	}
+}
+
+/* One moving picture: the tapestry drifts slowly. */
+.drift {
+	animation: drift 40s ease-in-out infinite alternate;
+}
+@keyframes drift {
+	from {
+		scale: 1.04;
+		translate: -1% 0;
+	}
+	to {
+		scale: 1.1;
+		translate: 1.5% -1%;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.js [data-reveal] {
+		translate: 0 0;
+		transition: opacity 300ms linear;
+	}
+	.monument-scroll,
+	.monument-arrive,
+	.drift {
+		animation: none;
+	}
 }

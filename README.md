@@ -1,6 +1,10 @@
-# CK3 Helix
+# Helix Paradox
 
-Share Crusader Kings III character DNA and portraits.
+A library of characters from Paradox games, shared with their DNA. Crusader Kings III for now: copy a
+face's DNA here, paste it into the game's Ruler Designer.
+
+Pages: `/` (landing), `/characters` (the library, filters in the URL), `/chara/:id`, `/user/:id`,
+`/upload` and `/upload/:id`, `/sign-in`, `/sign-up`.
 
 ```
 apps/
@@ -19,7 +23,7 @@ are first-party and there is no CORS to configure.
 | Route                            | Description                                                   |
 | -------------------------------- | ------------------------------------------------------------- |
 | `/api/auth/*`                    | Better Auth (email + password, sign in with username or email) |
-| `GET /api/characters`            | List. Query: `author, sex, mods=epe,cfp, q, sort, cursor, limit` |
+| `GET /api/characters`            | List with `total`. Query: `author, sex, mods=epe,cfp, q, sort, cursor, limit` |
 | `GET /api/characters/:id`        | One character                                                 |
 | `POST /api/characters`           | Create (multipart, see below)                                 |
 | `PATCH /api/characters/:id`      | Update (owner only)                                           |
@@ -62,3 +66,8 @@ pnpm deploy
 cd ../web
 pnpm build && wrangler deploy           # binds to the helix-api worker as API
 ```
+
+## Pictures
+
+The tapestry and effigy images in `apps/web/static/images` are public domain; sources and licences are in
+`apps/web/static/images/credits.json` and credited in the site footer.

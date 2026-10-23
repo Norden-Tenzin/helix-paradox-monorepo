@@ -4,21 +4,17 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.ico" />
+		<meta name="theme-color" content="#0c0a08" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 		<link
-			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Libre+Baskerville:wght@400;700&family=Lora:wght@400;700&display=swap"
+			href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap"
 			rel="stylesheet"
 		/>
 		<script>
-			// Follow the OS colour scheme (the old app used next-themes with defaultTheme="system").
-			(() => {
-				const mq = window.matchMedia('(prefers-color-scheme: dark)');
-				const apply = () => document.documentElement.classList.toggle('dark', mq.matches);
-				apply();
-				mq.addEventListener('change', apply);
-			})();
+			// Lets entrance animations hide content only when script is running.
+			document.documentElement.classList.add('js');
 		</script>
 		%sveltekit.head%
 	</head>

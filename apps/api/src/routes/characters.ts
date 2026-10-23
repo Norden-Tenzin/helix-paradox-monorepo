@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -24,11 +24,14 @@ const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
 });
 
+// Browsers send every line break in a multipart form as CRLF; store text as it was typed.
+const normalizeNewlines = (s: string) => s.replace(/\r\n?/g, "\n");
+
 const characterFields = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   sex: z.enum(["male", "female"]),
-  description: z.string().max(5000).default(""),
-  dna: z.string().trim().min(1, "DNA is required").max(50_000),
+  description: z.string().max(5000).default("").transform(normalizeNewlines),
+  dna: z.string().transform(normalizeNewlines).pipe(z.string().trim().min(1, "DNA is required").max(50_000)),
   mods: z
     .array(z.enum(MODS))
     .min(1, "Select at least one mod")
@@ -185,19 +188,28 @@ export const characterRoutes = new Hono<AppEnv>()
     }
 
     const order = sort === "oldest" ? asc : desc;
-    const rows = await db
-      .select(characterColumns)
-      .from(characters)
-      .innerJoin(user, eq(user.id, characters.authorId))
-      .where(and(...conditions))
-      .orderBy(order(characters.postedAt), order(characters.id))
-      .limit(limit + 1)
-      .offset(cursor);
+    const where = and(...conditions);
+    const [rows, [{ total }]] = await Promise.all([
+      db
+        .select(characterColumns)
+        .from(characters)
+        .innerJoin(user, eq(user.id, characters.authorId))
+        .where(where)
+        .orderBy(order(characters.postedAt), order(characters.id))
+        .limit(limit + 1)
+        .offset(cursor),
+      db
+        .select({ total: count() })
+        .from(characters)
+        .innerJoin(user, eq(user.id, characters.authorId))
+        .where(where),
+    ]);
 
     const hasMore = rows.length > limit;
     const body: CharacterPage = {
       page: await enrich(db, rows.slice(0, limit)),
       nextCursor: hasMore ? String(cursor + limit) : null,
+      total,
     };
     return c.json(body);
   })

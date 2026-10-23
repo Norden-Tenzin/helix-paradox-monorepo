@@ -1,10 +1,7 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { Ellipsis } from '@lucide/svelte';
-	import { AlertDialog, DropdownMenu } from 'bits-ui';
+	import { AlertDialog } from 'bits-ui';
 	import type { Character } from '#lib/api.ts';
-	import { button, dialogContent, menuContent, menuItem, overlay } from '#lib/ui.ts';
-	import Tag from './Tag.svelte';
+	import { button, dialogContent, overlay } from '#lib/ui.ts';
 
 	let {
 		chara,
@@ -14,78 +11,62 @@
 
 	let alertOpen = $state(false);
 	let deleting = $state(false);
+	let deleteError = $state('');
+
+	const modsLabel = $derived(chara.mods.map((m) => (m === 'vanilla' ? 'Vanilla' : m.toUpperCase())).join(' · '));
 
 	async function confirmDelete() {
 		if (!onDelete) return;
 		deleting = true;
+		deleteError = '';
 		try {
 			await onDelete(chara.id);
 			alertOpen = false;
+		} catch (err) {
+			deleteError = err instanceof Error ? err.message : 'Could not delete this character.';
 		} finally {
 			deleting = false;
 		}
 	}
 </script>
 
-<div class="relative aspect-3/5 w-full overflow-hidden bg-card hover:opacity-90">
-	<a href="/chara/{chara.id}" class="absolute inset-0" aria-label={chara.name}>
-		<img class="h-full w-full object-cover" src={chara.display_image} alt={chara.name} loading="lazy" />
-		<!-- Overlay gradient for readability -->
-		<div class="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-black/40"></div>
+<article class="group">
+	<a href="/chara/{chara.id}" class="block aspect-[2/3] overflow-hidden bg-surface">
+		<img
+			class="h-full w-full object-cover transition-[scale] duration-300 ease-out group-hover:scale-[1.04]"
+			src={chara.display_image}
+			alt="Portrait of {chara.name}"
+			loading="lazy"
+		/>
 	</a>
-
-	<div class="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between">
-		<div class="pointer-events-auto self-end p-2">
-			{#if isOwner}
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger
-						class="{button('ghost', 'icon')} h-8 w-8 text-white hover:bg-white/20 hover:text-white"
-						aria-label="Character actions"
-					>
-						<Ellipsis class="size-6!" />
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Portal>
-						<DropdownMenu.Content align="end" sideOffset={4} class="{menuContent} w-32">
-							<DropdownMenu.Item class={menuItem} onSelect={() => goto(`/upload/${chara.id}`)}>Edit</DropdownMenu.Item>
-							<DropdownMenu.Item
-								class="{menuItem} text-destructive data-highlighted:bg-destructive! data-highlighted:text-destructive-foreground!"
-								onSelect={() => (alertOpen = true)}
-							>
-								Delete
-							</DropdownMenu.Item>
-						</DropdownMenu.Content>
-					</DropdownMenu.Portal>
-				</DropdownMenu.Root>
-			{/if}
-		</div>
-
-		<div class="flex flex-col space-y-1 p-3">
-			<p class="font-mono leading-none font-bold text-white">{chara.name}</p>
-			<p class="text-sm text-white/70">{chara.author_name}</p>
-			<div class="mt-2 flex flex-wrap gap-1">
-				{#each chara.mods as mod (mod)}
-					<Tag text={mod} />
-				{/each}
-			</div>
-		</div>
-	</div>
-</div>
+	<h3 class="mt-3 line-clamp-2 text-[1.125rem] leading-tight tracking-[-0.02em]">
+		<a href="/chara/{chara.id}" class="hover:text-accent">{chara.name}</a>
+	</h3>
+	<p class="mt-1 truncate text-small text-muted">{modsLabel} · by {chara.author_name}</p>
+	{#if isOwner}
+		<p class="mt-2 flex gap-4 text-small">
+			<a href="/upload/{chara.id}" class="link">Edit</a>
+			<button type="button" class="link text-danger" onclick={() => (alertOpen = true)}>Delete</button>
+		</p>
+	{/if}
+</article>
 
 {#if isOwner}
 	<AlertDialog.Root bind:open={alertOpen}>
 		<AlertDialog.Portal>
 			<AlertDialog.Overlay class={overlay} />
 			<AlertDialog.Content class={dialogContent}>
-				<div class="flex flex-col space-y-2">
-					<AlertDialog.Title class="text-lg font-semibold">Are you absolutely sure?</AlertDialog.Title>
-					<AlertDialog.Description class="text-sm text-muted-foreground">
-						This action cannot be undone. This will permanently delete <strong>{chara.name}</strong>.
+				<div class="space-y-3">
+					<AlertDialog.Title class="text-lead font-semibold tracking-[-0.02em]">Delete {chara.name}?</AlertDialog.Title>
+					<AlertDialog.Description class="text-body">
+						The portrait and its DNA leave the library for good. This can't be undone.
 					</AlertDialog.Description>
+					{#if deleteError}<p class="text-small text-danger">{deleteError}</p>{/if}
 				</div>
-				<div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-					<AlertDialog.Cancel class={button('secondary')}>Cancel</AlertDialog.Cancel>
-					<AlertDialog.Action class={button('destructive')} disabled={deleting} onclick={confirmDelete}>
-						Delete Character
+				<div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+					<AlertDialog.Cancel class={button('quiet')}>Keep it</AlertDialog.Cancel>
+					<AlertDialog.Action class={button('danger')} disabled={deleting} onclick={confirmDelete}>
+						Delete character
 					</AlertDialog.Action>
 				</div>
 			</AlertDialog.Content>
