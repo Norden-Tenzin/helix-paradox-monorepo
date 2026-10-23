@@ -15,8 +15,7 @@
     {
       "binding": "DB",
       "database_name": "helix-db",
-      // Replace with the id printed by `wrangler d1 create helix-db` before deploying.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "855c8942-7646-4f81-8e05-55ddafa174c5",
       "migrations_dir": "migrations"
     }
   ],
