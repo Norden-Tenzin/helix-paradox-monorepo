@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Search } from '@lucide/svelte';
-	import { apiErrorMessage, type CharacterPage, type Mod, type Sex } from '#lib/api.ts';
+	import { apiErrorMessage, type CharacterPage, type Mod, type Sex, type TagSummary } from '#lib/api.ts';
 	import { characterListPath, filtersToParams, readFilters, type Filters, type ListScope } from '#lib/filters.ts';
 	import { button, field } from '#lib/ui.ts';
 	import CharacterCard from './CharacterCard.svelte';
@@ -10,6 +10,7 @@
 	let {
 		initial,
 		mods,
+		popularTags = [],
 		scope,
 		isOwner = false,
 		onDelete,
@@ -18,6 +19,8 @@
 		initial: CharacterPage;
 		/** The mods to offer as filters (GET /api/mods). */
 		mods: Mod[];
+		/** Most-used tags to offer as filters (GET /api/tags). */
+		popularTags?: TagSummary[];
 		/** Whose characters these are; matches what the page loaded `initial` with. */
 		scope?: ListScope;
 		isOwner?: boolean;
@@ -26,7 +29,14 @@
 	} = $props();
 
 	const filters = $derived(readFilters(page.url));
-	const filtered = $derived(!!(filters.sex || filters.mods.length || filters.q));
+	const filtered = $derived(!!(filters.sex || filters.mods.length || filters.tags.length || filters.q));
+
+	// Active tags first (even ones too rare to be popular, e.g. arrived at from a character's
+	// page), then the popular ones.
+	const tagChips = $derived([
+		...filters.tags.map((id) => ({ id, name: popularTags.find((t) => t.id === id)?.name ?? id.replace(/-/g, ' ') })),
+		...popularTags.filter((t) => !filters.tags.includes(t.id))
+	]);
 
 	// Reset to the server-loaded page whenever the filters (and therefore `initial`) change.
 	let results = $derived(initial.page);
@@ -46,6 +56,11 @@
 	const toggleMod = (mod: string) =>
 		applyFilters({
 			mods: filters.mods.includes(mod) ? filters.mods.filter((m) => m !== mod) : [...filters.mods, mod]
+		});
+
+	const toggleTag = (tag: string) =>
+		applyFilters({
+			tags: filters.tags.includes(tag) ? filters.tags.filter((t) => t !== tag) : [...filters.tags, tag]
 		});
 
 	async function loadMore() {
@@ -118,6 +133,24 @@
 			</button>
 		</div>
 	</div>
+
+	{#if tagChips.length > 0}
+		<div class="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Tags">
+			{#each tagChips as tag (tag.id)}
+				{@const on = filters.tags.includes(tag.id)}
+				<button
+					type="button"
+					class="h-8 px-3 text-small transition-colors {on
+						? 'bg-ink text-ground'
+						: 'bg-surface text-muted hover:bg-raised hover:text-ink'}"
+					aria-pressed={on}
+					onclick={() => toggleTag(tag.id)}
+				>
+					{tag.name}
+				</button>
+			{/each}
+		</div>
+	{/if}
 
 	<!-- Portraits -->
 	{#if results.length === 0}

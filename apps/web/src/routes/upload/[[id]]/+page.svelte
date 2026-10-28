@@ -4,6 +4,7 @@
 	import { ImagePlus, X } from '@lucide/svelte';
 	import { apiErrorMessage, type DnaReport, type Mod, type Sex } from '#lib/api.ts';
 	import Strand from '#lib/components/Strand.svelte';
+	import TagInput from '#lib/components/TagInput.svelte';
 	import { MIN_GENES, parseDna } from '#lib/dna.ts';
 	import { takeStashedDna } from '#lib/dna-stash.ts';
 	import { button, field, fieldLabel } from '#lib/ui.ts';
@@ -24,6 +25,7 @@
 	let dna = $derived(existing?.dna ?? '');
 	let sex = $derived<Sex>(existing?.sex ?? 'male');
 	let mods = $derived<string[]>(existing?.mods.map((m) => m.id) ?? []);
+	let tags = $derived<string[]>(existing?.tags.map((t) => t.name) ?? []);
 	// A mod the uploader names because the DNA has genes we don't recognise.
 	let newMod = $state('');
 	let displayImage = $derived<ImageValue>(existing?.display_image);
@@ -163,6 +165,7 @@
 			form.set('dna', dna);
 			for (const mod of mods) form.append('mods', mod);
 			if (newMod.trim()) form.set('newMod', newMod.trim());
+			for (const tag of tags) form.append('tags', tag);
 
 			const append = async (key: string, value: File | string) => {
 				if (typeof value === 'string') form.append(key, value);
@@ -333,6 +336,11 @@
 					class="{field} min-h-28 py-3"
 					placeholder="Who they are, which campaign they come from…"
 				></textarea>
+			</div>
+
+			<div>
+				<label for="tags" class={fieldLabel}>Tags (optional)</label>
+				<TagInput id="tags" bind:tags />
 			</div>
 
 			<div>

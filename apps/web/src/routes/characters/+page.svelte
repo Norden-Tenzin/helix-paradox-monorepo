@@ -18,4 +18,4 @@
 	</p>
 </header>
 
-<CharacterGrid initial={data.characters} mods={data.mods} />
+<CharacterGrid initial={data.characters} mods={data.mods} popularTags={data.popularTags} />

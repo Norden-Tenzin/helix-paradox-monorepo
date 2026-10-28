@@ -10,7 +10,9 @@ export type {
 	Mod,
 	PublicUser,
 	Sex,
-	Sort
+	Sort,
+	Tag,
+	TagSummary
 } from 'api/types';
 
 /** Reads the `{ error }` body the API sends on failure. */

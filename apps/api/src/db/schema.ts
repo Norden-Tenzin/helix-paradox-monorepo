@@ -129,6 +129,22 @@ export const characterMods = sqliteTable(
   (t) => [primaryKey({ columns: [t.cid, t.mod] }), index("character_mods_mod_idx").on(t.mod)],
 );
 
+// Tags people put on their characters, per game. `id` is the tag's slug ("norse-saga"), which
+// is what `character_tags.tag` stores; `name` is how it was first written ("Norse saga").
+// `useCount` is recounted from `character_tags` whenever a character's tags change.
+export const tags = sqliteTable(
+  "tags",
+  {
+    game: text("game").notNull(),
+    id: text("id").notNull(),
+    name: text("name").notNull(),
+    useCount: integer("use_count").notNull().default(0),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.game, t.id] }), index("tags_game_use_idx").on(t.game, t.useCount)],
+);
+
 export const characterTags = sqliteTable(
   "character_tags",
   {

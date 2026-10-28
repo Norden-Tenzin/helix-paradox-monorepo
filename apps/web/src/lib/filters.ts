@@ -5,6 +5,8 @@ type URLSearchParamsReader = Pick<URLSearchParams, 'get'>;
 export interface Filters {
 	sex?: Sex;
 	mods: string[];
+	/** Tag slugs; characters must carry all of them. */
+	tags: string[];
 	sort: Sort;
 	q: string;
 }
@@ -15,6 +17,7 @@ export function readFilters(url: { searchParams: URLSearchParamsReader }): Filte
 	return {
 		sex: sex === 'male' || sex === 'female' ? sex : undefined,
 		mods: url.searchParams.get('mods')?.split(',').filter(Boolean) ?? [],
+		tags: url.searchParams.get('tags')?.split(',').filter(Boolean) ?? [],
 		sort: url.searchParams.get('sort') === 'oldest' ? 'oldest' : 'newest',
 		q: url.searchParams.get('q') ?? ''
 	};
@@ -24,6 +27,7 @@ export function filtersToParams(filters: Filters) {
 	const params = new URLSearchParams();
 	if (filters.sex) params.set('sex', filters.sex);
 	if (filters.mods.length > 0) params.set('mods', filters.mods.join(','));
+	if (filters.tags.length > 0) params.set('tags', filters.tags.join(','));
 	if (filters.sort !== 'newest') params.set('sort', filters.sort);
 	if (filters.q) params.set('q', filters.q);
 	return params;

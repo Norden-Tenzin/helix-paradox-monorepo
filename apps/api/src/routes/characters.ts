@@ -4,12 +4,13 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { requireUser, viewerId, type AppEnv } from "../context";
 import type { Db } from "../db";
-import { characterMods, characters, characterTags, favourites, mods, user } from "../db/schema";
+import { characterMods, characters, characterTags, favourites, mods, tags, user } from "../db/schema";
 import { dnaFingerprint, guessMods, MIN_GENES, parseDna } from "../dna";
 import { BASE_MOD, DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
 import { deleteImages, imageUrl, MAX_GRID_IMAGES, putImage, toStoredValue, validateImage } from "../images";
 import { gameMods, namedMod, signatures } from "../mods";
-import type { Character, CharacterPage, FavouriteState, Mod } from "../types";
+import { recountTags, resolveTags } from "../tags";
+import type { Character, CharacterPage, FavouriteState, Mod, Tag } from "../types";
 
 const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 48;
@@ -22,6 +23,11 @@ const listQuery = z.object({
     .string()
     .optional()
     .transform((v) => (v ? [...new Set(v.split(",").map((m) => m.trim().toLowerCase()).filter(Boolean))] : [])),
+  /** Tag slugs, comma-separated: characters carrying all of them. */
+  tags: z
+    .string()
+    .optional()
+    .transform((v) => (v ? [...new Set(v.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean))] : [])),
   q: z.string().trim().max(100).optional(),
   /** "mine": the signed-in person's favourites, most recently favourited first. */
   favourites: z.literal("mine").optional(),
@@ -43,6 +49,8 @@ const characterFields = z.object({
   mods: z.array(z.string().trim().toLowerCase().min(1).max(40)).transform((ids) => [...new Set(ids)]),
   /** A mod we don't list yet, named by the uploader because the DNA has genes we don't recognise. */
   newMod: z.string().trim().max(60).optional(),
+  /** Tag names as typed; resolveTags cleans, dedupes and caps them. */
+  tags: z.array(z.string().max(60)).max(20).default([]),
 });
 
 type CharacterFields = z.infer<typeof characterFields>;
@@ -71,14 +79,19 @@ type CharacterRow = Omit<Character, "mods" | "tags" | "game" | "favourited"> & {
 async function enrich(db: Db, rows: CharacterRow[], viewer: string | null): Promise<Character[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [modRows, tags, mine] = await Promise.all([
+  const [modRows, tagRows, mine] = await Promise.all([
     db
       .select({ cid: characterMods.cid, id: mods.id, name: mods.name, status: mods.status })
       .from(characterMods)
       .innerJoin(characters, eq(characters.id, characterMods.cid))
       .innerJoin(mods, and(eq(mods.game, characters.game), eq(mods.id, characterMods.mod)))
       .where(inArray(characterMods.cid, ids)),
-    db.select().from(characterTags).where(inArray(characterTags.cid, ids)),
+    db
+      .select({ cid: characterTags.cid, id: tags.id, name: tags.name })
+      .from(characterTags)
+      .innerJoin(characters, eq(characters.id, characterTags.cid))
+      .innerJoin(tags, and(eq(tags.game, characters.game), eq(tags.id, characterTags.tag)))
+      .where(inArray(characterTags.cid, ids)),
     viewer
       ? db
           .select({ id: favourites.characterId })
@@ -95,7 +108,7 @@ async function enrich(db: Db, rows: CharacterRow[], viewer: string | null): Prom
     mods: modRows
       .filter((m) => m.cid === r.id)
       .map((m): Mod => ({ id: m.id, name: m.name, pending: m.status === "pending" })),
-    tags: tags.filter((t) => t.cid === r.id).map((t) => t.tag),
+    tags: tagRows.filter((t) => t.cid === r.id).map((t): Tag => ({ id: t.id, name: t.name })),
     favourited: favourited.has(r.id),
   }));
 }
@@ -174,6 +187,7 @@ async function readCharacterForm(req: Request) {
     dna: text("dna"),
     mods: form.getAll("mods").filter((m) => typeof m === "string"),
     newMod: text("newMod") || undefined,
+    tags: form.getAll("tags").filter((t) => typeof t === "string"),
   });
   if (!parsed.success) {
     throw new HTTPException(400, { message: parsed.error.issues.map((i) => i.message).join(", ") });
@@ -237,7 +251,7 @@ export const characterRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
     const parsed = listQuery.safeParse(c.req.query());
     if (!parsed.success) throw new HTTPException(400, { message: "Invalid query" });
-    const { game, author, sex, mods, q, favourites: favouritesOf, sort, cursor, limit } = parsed.data;
+    const { game, author, sex, mods, tags: tagged, q, favourites: favouritesOf, sort, cursor, limit } = parsed.data;
     const db = c.var.db;
     const viewer = await viewerId(c);
     if (favouritesOf && !viewer) throw new HTTPException(401, { message: "Sign in to see your favourites" });
@@ -263,6 +277,21 @@ export const characterRoutes = new Hono<AppEnv>()
             .where(inArray(characterMods.mod, mods))
             .groupBy(characterMods.cid)
             .having(sql`count(*) = ${mods.length}`),
+        ),
+      );
+    }
+
+    if (tagged.length > 0) {
+      // Characters carrying *all* requested tags.
+      conditions.push(
+        inArray(
+          characters.id,
+          db
+            .select({ cid: characterTags.cid })
+            .from(characterTags)
+            .where(inArray(characterTags.tag, tagged))
+            .groupBy(characterTags.cid)
+            .having(sql`count(*) = ${tagged.length}`),
         ),
       );
     }
@@ -328,6 +357,7 @@ export const characterRoutes = new Hono<AppEnv>()
 
     const id = crypto.randomUUID();
     const resolved = await resolveDnaAndMods(c.var.db, fields, c.var.user.id);
+    const tagIds = await resolveTags(c.var.db, fields.game, fields.tags, c.var.user.id);
     const images = await resolveImages(c.env.BUCKET, id, display, grid, new Set());
     const now = Date.now();
     try {
@@ -347,6 +377,8 @@ export const characterRoutes = new Hono<AppEnv>()
           gridImages: images.gridImages,
         }),
         c.var.db.insert(characterMods).values(resolved.mods.map((mod) => ({ cid: id, mod }))),
+        ...(tagIds.length > 0 ? [c.var.db.insert(characterTags).values(tagIds.map((tag) => ({ cid: id, tag })))] : []),
+        recountTags(c.var.db, fields.game, tagIds),
       ]);
     } catch (err) {
       await deleteImages(c.env.BUCKET, images.uploaded);
@@ -360,6 +392,8 @@ export const characterRoutes = new Hono<AppEnv>()
     const existing = await getOwnedCharacter(c.var.db, id, c.var.user.id);
     const { fields, display, grid } = await readCharacterForm(c.req.raw);
     const resolved = await resolveDnaAndMods(c.var.db, fields, c.var.user.id);
+    const tagIds = await resolveTags(c.var.db, fields.game, fields.tags, c.var.user.id);
+    const oldTags = await c.var.db.select({ tag: characterTags.tag }).from(characterTags).where(eq(characterTags.cid, id));
 
     const previous = [existing.displayImage, ...existing.gridImages];
     const images = await resolveImages(c.env.BUCKET, id, display, grid, new Set(previous));
@@ -381,6 +415,11 @@ export const characterRoutes = new Hono<AppEnv>()
           .where(eq(characters.id, id)),
         c.var.db.delete(characterMods).where(eq(characterMods.cid, id)),
         c.var.db.insert(characterMods).values(resolved.mods.map((mod) => ({ cid: id, mod }))),
+        c.var.db.delete(characterTags).where(eq(characterTags.cid, id)),
+        ...(tagIds.length > 0 ? [c.var.db.insert(characterTags).values(tagIds.map((tag) => ({ cid: id, tag })))] : []),
+        // Tags it lost, and tags it gained (also under its previous game, if that changed).
+        recountTags(c.var.db, fields.game, [...new Set([...oldTags.map((t) => t.tag), ...tagIds])]),
+        recountTags(c.var.db, existing.game, oldTags.map((t) => t.tag)),
       ]);
     } catch (err) {
       await deleteImages(c.env.BUCKET, images.uploaded);
@@ -399,8 +438,12 @@ export const characterRoutes = new Hono<AppEnv>()
   .delete("/:id", requireUser, async (c) => {
     const id = c.req.param("id");
     const existing = await getOwnedCharacter(c.var.db, id, c.var.user.id);
-    // Mods and tags are removed by ON DELETE CASCADE.
-    await c.var.db.delete(characters).where(eq(characters.id, id));
+    const oldTags = await c.var.db.select({ tag: characterTags.tag }).from(characterTags).where(eq(characterTags.cid, id));
+    // Mods, tags and favourites go with it (ON DELETE CASCADE); then its tags are recounted.
+    await c.var.db.batch([
+      c.var.db.delete(characters).where(eq(characters.id, id)),
+      recountTags(c.var.db, existing.game, oldTags.map((t) => t.tag)),
+    ]);
     await deleteImages(c.env.BUCKET, [existing.displayImage, ...existing.gridImages]);
     return c.json({ success: true });
   });

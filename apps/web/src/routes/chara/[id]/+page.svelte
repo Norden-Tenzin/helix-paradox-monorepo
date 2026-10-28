@@ -87,6 +87,21 @@
 			<dd>{character.sex === 'female' ? 'Female' : 'Male'}</dd>
 		</dl>
 
+		{#if character.tags.length > 0}
+			<ul class="mt-5 flex flex-wrap gap-2" aria-label="Tags">
+				{#each character.tags as tag (tag.id)}
+					<li>
+						<a
+							href="/characters?tags={tag.id}"
+							class="inline-flex h-8 items-center bg-surface px-3 text-small text-muted transition-colors hover:bg-raised hover:text-ink"
+						>
+							{tag.name}
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+
 		{#if character.description}
 			<p class="mt-6 max-w-[60ch] text-body whitespace-pre-line">{character.description}</p>
 		{/if}

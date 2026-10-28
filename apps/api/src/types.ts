@@ -13,6 +13,17 @@ export interface Mod {
   pending: boolean;
 }
 
+/** A tag as it appears on a character; `id` is its slug, used in URLs and filters. */
+export interface Tag {
+  id: string;
+  name: string;
+}
+
+/** A tag with how many characters use it (GET /api/tags). */
+export interface TagSummary extends Tag {
+  count: number;
+}
+
 export interface Character {
   id: string;
   game: GameId;
@@ -28,7 +39,7 @@ export interface Character {
   display_image: string;
   grid_images: string[];
   mods: Mod[];
-  tags: string[];
+  tags: Tag[];
   favourite_count: number;
   /** Whether the person asking has favourited it (always false when signed out). */
   favourited: boolean;

@@ -18,10 +18,11 @@
 		error = '';
 		loading = true;
 		const id = identifier.trim();
-		const callbackURL = `/verify?redirect=${encodeURIComponent(redirectTo)}`;
+		// No callbackURL: with one, Better Auth's client reloads the whole page to it after signing
+		// in, racing the goto below. (The "confirm your email first" link then lands on the home page.)
 		const result = id.includes('@')
-			? await authClient.signIn.email({ email: id, password, callbackURL })
-			: await authClient.signIn.username({ username: id, password, callbackURL });
+			? await authClient.signIn.email({ email: id, password })
+			: await authClient.signIn.username({ username: id, password });
 		loading = false;
 		if (result.error) {
 			// Signing in before confirming sends a fresh link (emailVerification.sendOnSignIn).

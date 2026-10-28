@@ -27,6 +27,7 @@
   "exports": {
     "./types": "./src/types.ts",
     "./dna": "./src/dna.ts",
-    "./games": "./src/games.ts"
+    "./games": "./src/games.ts",
+    "./tag-names": "./src/tag-names.ts"
   }
 }
