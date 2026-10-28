@@ -73,6 +73,7 @@ export const characters = sqliteTable(
   "characters",
   {
     id: text("id").primaryKey(),
+    game: text("game").notNull().default("ck3"),
     name: text("name").notNull(),
     sex: text("sex", { enum: ["male", "female"] }).notNull(),
     description: text("description").notNull().default(""),
@@ -82,6 +83,8 @@ export const characters = sqliteTable(
     postedAt: integer("posted_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     dna: text("dna").notNull(),
+    // dnaFingerprint() of the DNA, to spot the same face shared twice. Null until backfilled.
+    dnaHash: text("dna_hash"),
     // R2 object key, or an absolute URL for legacy images.
     displayImage: text("display_image").notNull(),
     gridImages: text("grid_images", { mode: "json" }).$type<string[]>().notNull().default([]),
@@ -89,7 +92,27 @@ export const characters = sqliteTable(
   (t) => [
     index("characters_author_posted_idx").on(t.authorId, t.postedAt),
     index("characters_posted_idx").on(t.postedAt),
+    index("characters_game_posted_idx").on(t.game, t.postedAt),
+    index("characters_game_dna_hash_idx").on(t.game, t.dnaHash),
   ],
+);
+
+// The mods a face can be made with, per game, including each game's base game (id "vanilla").
+// `genes` is the mod's signature for guessing it from a DNA string (see guessMods in dna.ts):
+// for the base game every gene it has, for a mod the genes only it adds. A mod named by an
+// uploader starts "pending": shown on its characters, but not offered in filters until listed.
+export const mods = sqliteTable(
+  "mods",
+  {
+    game: text("game").notNull(),
+    id: text("id").notNull(),
+    name: text("name").notNull(),
+    genes: text("genes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    status: text("status", { enum: ["listed", "pending"] }).notNull().default("listed"),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.game, t.id] })],
 );
 
 export const characterMods = sqliteTable(

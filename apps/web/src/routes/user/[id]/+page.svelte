@@ -35,6 +35,7 @@
 
 <CharacterGrid
 	initial={data.characters}
+	mods={data.mods}
 	authorId={data.profile.id}
 	isOwner={isMyProfile}
 	onDelete={handleDelete}

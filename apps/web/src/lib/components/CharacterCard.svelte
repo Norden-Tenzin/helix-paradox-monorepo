@@ -13,7 +13,7 @@
 	let deleting = $state(false);
 	let deleteError = $state('');
 
-	const modsLabel = $derived(chara.mods.map((m) => (m === 'vanilla' ? 'Vanilla' : m.toUpperCase())).join(' · '));
+	const modsLabel = $derived(chara.mods.map((m) => m.name).join(' · '));
 
 	async function confirmDelete() {
 		if (!onDelete) return;

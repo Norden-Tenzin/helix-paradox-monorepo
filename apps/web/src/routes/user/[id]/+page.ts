@@ -1,11 +1,12 @@
-import { loadJson, type CharacterPage, type PublicUser } from '#lib/api.ts';
+import { loadJson, type CharacterPage, type Mod, type PublicUser } from '#lib/api.ts';
 import { characterListPath, readFilters } from '#lib/filters.ts';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch, params, url }) => {
-	const [profile, characters] = await Promise.all([
+	const [profile, characters, mods] = await Promise.all([
 		loadJson<PublicUser>(fetch, `/api/users/${encodeURIComponent(params.id)}`),
-		loadJson<CharacterPage>(fetch, characterListPath(readFilters(url), params.id))
+		loadJson<CharacterPage>(fetch, characterListPath(readFilters(url), params.id)),
+		loadJson<Mod[]>(fetch, '/api/mods')
 	]);
-	return { profile, characters };
+	return { profile, characters, mods };
 };

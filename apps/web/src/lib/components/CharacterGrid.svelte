@@ -2,19 +2,22 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Search } from '@lucide/svelte';
-	import { apiErrorMessage, MODS, type CharacterPage, type Sex } from '#lib/api.ts';
+	import { apiErrorMessage, type CharacterPage, type Mod, type Sex } from '#lib/api.ts';
 	import { characterListPath, filtersToParams, readFilters, type Filters } from '#lib/filters.ts';
 	import { button, field } from '#lib/ui.ts';
 	import CharacterCard from './CharacterCard.svelte';
 
 	let {
 		initial,
+		mods,
 		authorId,
 		isOwner = false,
 		onDelete,
 		emptyMessage = 'No characters match these filters.'
 	}: {
 		initial: CharacterPage;
+		/** The mods to offer as filters (GET /api/mods). */
+		mods: Mod[];
 		authorId?: string;
 		isOwner?: boolean;
 		onDelete?: (id: string) => Promise<void>;
@@ -98,10 +101,10 @@
 					</button>
 				{/each}
 			</div>
-			<div class="flex gap-px" role="group" aria-label="Mods">
-				{#each MODS as mod (mod)}
-					<button type="button" class={toggle} aria-pressed={filters.mods.includes(mod)} onclick={() => toggleMod(mod)}>
-						{mod === 'vanilla' ? 'Vanilla' : mod.toUpperCase()}
+			<div class="flex flex-wrap gap-px" role="group" aria-label="Mods">
+				{#each mods as mod (mod.id)}
+					<button type="button" class={toggle} aria-pressed={filters.mods.includes(mod.id)} onclick={() => toggleMod(mod.id)}>
+						{mod.name}
 					</button>
 				{/each}
 			</div>

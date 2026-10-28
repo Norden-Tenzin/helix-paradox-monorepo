@@ -10,8 +10,9 @@
 	const images = $derived([character.display_image, ...character.grid_images]);
 	const geneCount = $derived(parseDna(character.dna).length);
 	const isOwner = $derived(data.user?.id === character.author_id);
+	// A pending mod was named by an uploader and hasn't been added to the list yet.
 	const modsLabel = $derived(
-		character.mods.map((m) => (m === 'vanilla' ? 'Vanilla' : m.toUpperCase())).join(', ')
+		character.mods.map((m) => (m.pending ? `${m.name} (not yet listed)` : m.name)).join(', ')
 	);
 	const posted = $derived(
 		new Date(character.posted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })

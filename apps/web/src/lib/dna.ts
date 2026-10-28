@@ -1,63 +1,13 @@
-// Reads Crusader Kings III DNA strings (Ruler Designer "Copy DNA" output).
-//
-//   ruler_designer_123={
-//     genes={
-//       hair_color={ 30 13 72 250 }
-//       gene_chin_forward={ "chin_forward_pos" 136 "chin_forward_pos" 114 }
-//       ...
-//
-// Each gene carries two values (0–255), one per strand. Colour genes carry two x/y pairs; we keep x.
-
-export interface Gene {
-	name: string;
-	/** First value of the pair, 0–255. */
-	a: number;
-	/** Second value of the pair, 0–255. */
-	b: number;
-}
-
-/** A DNA string with fewer genes than this is treated as incomplete. */
-export const MIN_GENES = 20;
-
-const GENE_PATTERN = /([a-z0-9_]+)\s*=\s*\{([^{}]*)\}/gi;
-
-export function parseDna(dna: string): Gene[] {
-	const genes: Gene[] = [];
-	for (const [, name, body] of dna.matchAll(GENE_PATTERN)) {
-		const numbers = body.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
-		if (numbers.length < 2) continue;
-		const half = Math.floor(numbers.length / 2);
-		genes.push({ name, a: clampByte(numbers[0]), b: clampByte(numbers[half]) });
-	}
-	return genes;
-}
-
-/** "gene_chin_forward" → "Chin forward" */
-export function geneLabel(name: string) {
-	const words = name.replace(/^gene_(bs_)?/, '').replace(/_/g, ' ');
-	return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-/** The part of the face (or body) a gene shapes, in the order a face map reads, top to bottom. */
-export const REGIONS = ['Head', 'Brow', 'Eyes', 'Nose', 'Cheeks', 'Mouth', 'Jaw', 'Body', 'Hair & skin'] as const;
-export type Region = (typeof REGIONS)[number];
-
-const REGION_PATTERNS: [RegExp, Region][] = [
-	[/hair|eyebrow|eyelash|beard|bald|skin_color|eye_color|complexion|accessory/, 'Hair & skin'],
-	[/forehead|brow|expression/, 'Brow'],
-	[/eye/, 'Eyes'],
-	[/nose|nasolabial/, 'Nose'],
-	[/mouth|teeth/, 'Mouth'],
-	[/chin|jaw/, 'Jaw'],
-	[/cheek|ear|temple/, 'Cheeks'],
-	[/head|neck/, 'Head']
-];
-
-export function geneRegion(name: string): Region {
-	return REGION_PATTERNS.find(([pattern]) => pattern.test(name))?.[1] ?? 'Body';
-}
-
-const clampByte =(n: number) => Math.max(0, Math.min(255, Math.round(n)));
+// DNA reading is shared with the API, which validates uploads with the same code.
+export {
+	MIN_GENES,
+	REGIONS,
+	geneLabel,
+	geneRegion,
+	parseDna,
+	type Gene,
+	type Region
+} from 'api/dna';
 
 /** The first `lines` entries of a DNA string, one per line and indented by depth (game exports vary in layout). */
 export function formatDnaPreview(dna: string, lines: number) {

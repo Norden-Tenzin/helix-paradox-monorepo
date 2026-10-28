@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { ImagePlus, X } from '@lucide/svelte';
-	import { apiErrorMessage, MODS, type Sex } from '#lib/api.ts';
+	import { apiErrorMessage, type DnaReport, type Mod, type Sex } from '#lib/api.ts';
 	import Strand from '#lib/components/Strand.svelte';
 	import { MIN_GENES, parseDna } from '#lib/dna.ts';
 	import { takeStashedDna } from '#lib/dna-stash.ts';
@@ -23,11 +23,56 @@
 	let description = $derived(existing?.description ?? '');
 	let dna = $derived(existing?.dna ?? '');
 	let sex = $derived<Sex>(existing?.sex ?? 'male');
-	let mods = $derived<string[]>(existing?.mods ?? []);
+	let mods = $derived<string[]>(existing?.mods.map((m) => m.id) ?? []);
+	// A mod the uploader names because the DNA has genes we don't recognise.
+	let newMod = $state('');
 	let displayImage = $derived<ImageValue>(existing?.display_image);
 	let gridImages = $derived<ImageValue[]>([0, 1, 2].map((i) => existing?.grid_images[i]));
 
 	const geneCount = $derived(parseDna(dna).length);
+
+	// The mods to choose from: the listed ones, plus any unlisted mod this character already has.
+	const modOptions = $derived<Mod[]>([
+		...data.mods,
+		...(existing?.mods.filter((m) => !data.mods.some((o) => o.id === m.id)) ?? [])
+	]);
+	const modName = (id: string) => modOptions.find((m) => m.id === id)?.name ?? id;
+
+	// The API reads the DNA as it's pasted: which mods it points to, genes it doesn't know, and
+	// whether the same face is already shared. Detected mods are filled in until the uploader
+	// chooses for themselves.
+	let report = $state<DnaReport | null>(null);
+	let modsTouched = $state(false);
+	$effect(() => {
+		const text = dna;
+		if (parseDna(text).length === 0) {
+			report = null;
+			return;
+		}
+		const controller = new AbortController();
+		const timer = setTimeout(async () => {
+			try {
+				const response = await fetch('/api/dna/inspect', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ dna: text, exclude: existing?.id }),
+					signal: controller.signal
+				});
+				if (!response.ok) return;
+				report = await response.json();
+				const suggested = report!.suggestedMods.filter((id) => modOptions.some((m) => m.id === id));
+				if (!modsTouched && !isEditMode && suggested.length > 0) mods = suggested;
+			} catch {
+				// Aborted or offline: the server checks again on submit.
+			}
+		}, 350);
+		return () => {
+			clearTimeout(timer);
+			controller.abort();
+		};
+	});
+	const detected = $derived(report?.suggestedMods.filter((id) => modOptions.some((m) => m.id === id)) ?? []);
+	const matchesDetected = $derived(detected.length === mods.length && detected.every((id) => mods.includes(id)));
 
 	// A DNA string pasted on the home page arrives here (possibly via sign-up).
 	onMount(() => {
@@ -68,6 +113,7 @@
 	}
 
 	function toggleMod(mod: string) {
+		modsTouched = true;
 		const isSelected = mods.includes(mod);
 		if (mod === 'vanilla') {
 			mods = isSelected ? [] : ['vanilla'];
@@ -82,7 +128,7 @@
 		if (!name.trim()) next.name = 'Give the character a name.';
 		if (!dna.trim()) next.dna = 'Paste the DNA from the Ruler Designer.';
 		else if (geneCount < MIN_GENES) next.dna = 'This DNA looks cut short. Copy the whole string from the game.';
-		if (mods.length === 0) next.mods = 'Choose the mods this face was made with.';
+		if (mods.length === 0 && !newMod.trim()) next.mods = 'Choose the mods this face was made with.';
 		if (!displayImage) next.displayImage = 'Add a portrait.';
 		return next;
 	}
@@ -116,6 +162,7 @@
 			form.set('description', description);
 			form.set('dna', dna);
 			for (const mod of mods) form.append('mods', mod);
+			if (newMod.trim()) form.set('newMod', newMod.trim());
 
 			const append = async (key: string, value: File | string) => {
 				if (typeof value === 'string') form.append(key, value);
@@ -250,14 +297,31 @@
 				</div>
 				<div>
 					<span class={fieldLabel}>Made with</span>
-					<div class="flex gap-px" role="group" aria-label="Mods">
-						{#each MODS as mod (mod)}
-							<button type="button" class={toggle} aria-pressed={mods.includes(mod)} onclick={() => toggleMod(mod)}>
-								{mod === 'vanilla' ? 'Vanilla' : mod.toUpperCase()}
+					<div class="flex flex-wrap gap-px" role="group" aria-label="Mods">
+						{#each modOptions as mod (mod.id)}
+							<button
+								type="button"
+								class={toggle}
+								aria-pressed={mods.includes(mod.id)}
+								title={mod.pending ? 'Named by an uploader; not listed yet' : undefined}
+								onclick={() => toggleMod(mod.id)}
+							>
+								{mod.name}{#if mod.pending}<span class="ml-1.5 opacity-60">new</span>{/if}
 							</button>
 						{/each}
 					</div>
-					{#if errors.mods}<p class="mt-2 text-small text-danger">{errors.mods}</p>{/if}
+					{#if errors.mods}
+						<p class="mt-2 text-small text-danger">{errors.mods}</p>
+					{:else if detected.length > 0}
+						<p class="mt-2 text-small text-muted" aria-live="polite">
+							The DNA looks like {detected.map(modName).join(' + ')}.
+							{#if !matchesDetected}
+								<button type="button" class="link text-ink" onclick={() => ((mods = detected), (modsTouched = true))}>
+									Use that
+								</button>
+							{/if}
+						</p>
+					{/if}
 				</div>
 			</div>
 
@@ -285,10 +349,29 @@
 				{:else if geneCount > 0}
 					<p class="mt-2 text-small text-muted">{geneCount} genes read.</p>
 				{/if}
+				{#if report && report.duplicates.length > 0}
+					<p class="mt-2 text-small text-ink" role="status">
+						This exact DNA is already shared as
+						{#each report.duplicates as dup, i (dup.id)}{i > 0 ? ', ' : ''}<a href="/chara/{dup.id}" class="link">{dup.name}</a>{/each}.
+						You can still share it, if it's a different character.
+					</p>
+				{/if}
 				{#if geneCount > 0}
 					<div class="mt-5"><Strand {dna} interactive class="h-32" /></div>
 				{/if}
 			</div>
+
+			{#if report && report.unknownGenes.length > 0}
+				<div>
+					<label for="new-mod" class={fieldLabel}>Which mod did you use?</label>
+					<p class="mb-3 max-w-[60ch] text-small text-muted">
+						This DNA has {report.unknownGenes.length}
+						{report.unknownGenes.length === 1 ? 'gene' : 'genes'} we don't recognise, so it was probably made with a mod
+						we don't list yet. Name it and we'll add it. Leave it empty if you're not sure.
+					</p>
+					<input id="new-mod" bind:value={newMod} class="{field} h-12 max-w-sm" placeholder="e.g. A Game of Thrones" autocomplete="off" />
+				</div>
+			{/if}
 
 			{#if submitError}
 				<p class="text-body text-danger" role="alert">{submitError}</p>
