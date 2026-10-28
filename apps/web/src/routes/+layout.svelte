@@ -15,7 +15,10 @@
 	<title>Helix Paradox</title>
 	<meta name="description" content="Share and copy character DNA from Paradox games, starting with Crusader Kings III." />
 	<meta property="og:site_name" content="Helix Paradox" />
-	<meta property="og:image" content="/images/bayeux-comet.jpg" />
+	<!-- Character pages share their portrait instead; scrapers take the first og:image they see. -->
+	{#if page.route.id !== '/chara/[id]'}
+		<meta property="og:image" content={new URL('/images/bayeux-comet.jpg', page.url.origin).href} />
+	{/if}
 </svelte:head>
 
 <Navbar user={data.user} />

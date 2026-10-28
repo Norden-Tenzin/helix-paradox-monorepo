@@ -1,5 +1,7 @@
 import type { Sex, Sort } from './api.ts';
 
+const SORTS: Sort[] = ['newest', 'popular', 'oldest'];
+
 type URLSearchParamsReader = Pick<URLSearchParams, 'get'>;
 
 export interface Filters {
@@ -18,7 +20,7 @@ export function readFilters(url: { searchParams: URLSearchParamsReader }): Filte
 		sex: sex === 'male' || sex === 'female' ? sex : undefined,
 		mods: url.searchParams.get('mods')?.split(',').filter(Boolean) ?? [],
 		tags: url.searchParams.get('tags')?.split(',').filter(Boolean) ?? [],
-		sort: url.searchParams.get('sort') === 'oldest' ? 'oldest' : 'newest',
+		sort: SORTS.find((s) => s === url.searchParams.get('sort')) ?? 'newest',
 		q: url.searchParams.get('q') ?? ''
 	};
 }

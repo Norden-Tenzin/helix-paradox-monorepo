@@ -9,8 +9,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply helix-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply helix-db --remote",
-    "db:backfill:local": "node scripts/backfill-dna-hash.mts --local",
-    "db:backfill:remote": "node scripts/backfill-dna-hash.mts --remote"
+    "db:backfill:local": "node scripts/backfill-dna.mts --local",
+    "db:backfill:remote": "node scripts/backfill-dna.mts --remote"
   },
   "dependencies": {
     "better-auth": "^1.7.12",

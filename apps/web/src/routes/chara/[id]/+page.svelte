@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { Check, Copy } from '@lucide/svelte';
+	import CharacterCard from '#lib/components/CharacterCard.svelte';
 	import FavouriteButton from '#lib/components/FavouriteButton.svelte';
 	import ReportButton from '#lib/components/ReportButton.svelte';
 	import Strand from '#lib/components/Strand.svelte';
@@ -17,9 +19,18 @@
 	const modsLabel = $derived(
 		character.mods.map((m) => (m.pending ? `${m.name} (not yet listed)` : m.name)).join(', ')
 	);
+	const shareText = $derived(
+		`${character.name}, a Crusader Kings III character${character.mods.length ? ` (${character.mods.map((m) => m.name).join(', ')})` : ''} by ${character.author_name}. Copy the DNA and paste it into the Ruler Designer.`
+	);
 	const posted = $derived(
 		new Date(character.posted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 	);
+
+	// Count a view once the page is in a browser (not on the server, so link previews and
+	// prefetches don't count). Views aren't shown anywhere yet.
+	$effect(() => {
+		fetch(`/api/characters/${character.id}/view`, { method: 'POST' }).catch(() => {});
+	});
 
 	let shown = $state(0);
 	$effect.pre(() => {
@@ -42,10 +53,17 @@
 	}
 </script>
 
+<!-- Share previews (chat apps, social sites) need absolute URLs, and show the portrait large. -->
 <svelte:head>
 	<title>{character.name} · Helix Paradox</title>
-	<meta name="description" content="{character.name}, a Crusader Kings III character by {character.author_name}. Copy the DNA." />
-	<meta property="og:image" content={character.display_image} />
+	<meta name="description" content={shareText} />
+	<meta property="og:type" content="article" />
+	<meta property="og:title" content="{character.name} · Helix Paradox" />
+	<meta property="og:description" content={shareText} />
+	<meta property="og:url" content={page.url.origin + page.url.pathname} />
+	<meta property="og:image" content={new URL(character.display_image, page.url.origin).href} />
+	<meta property="og:image:alt" content="Portrait of {character.name}" />
+	<meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
 
 <article class="wrap grid grid-cols-1 gap-x-12 gap-y-10 pt-8 pb-24 lg:grid-cols-12 [&>*]:min-w-0">
@@ -175,4 +193,17 @@
 			class="mt-4 max-h-96 overflow-auto bg-surface p-5 text-[0.8125rem] leading-relaxed text-ink/85"
 			tabindex="0">{character.dna}</pre>
 	</section>
+
+	{#if data.similar.length > 0}
+		<!-- Faces whose DNA is closest to this one (same game), from GET /api/characters/:id/similar. -->
+		<section class="lg:col-span-12" aria-labelledby="similar-heading">
+			<h2 id="similar-heading" class="text-lead">More like this</h2>
+			<p class="mt-2 text-small text-muted">The closest faces in the library, going by their DNA.</p>
+			<div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 sm:gap-x-6 lg:grid-cols-5">
+				{#each data.similar as chara (chara.id)}
+					<CharacterCard {chara} />
+				{/each}
+			</div>
+		</section>
+	{/if}
 </article>

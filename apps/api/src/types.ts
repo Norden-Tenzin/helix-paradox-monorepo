@@ -4,7 +4,7 @@ import type { GameId } from "./games";
 
 export type { GameId };
 export type Sex = "male" | "female";
-export type Sort = "newest" | "oldest";
+export type Sort = "newest" | "oldest" | "popular";
 
 /** Why someone reports a character. */
 export const REPORT_REASONS = ["broken_dna", "wrong_mods", "duplicate", "inappropriate", "other"] as const;

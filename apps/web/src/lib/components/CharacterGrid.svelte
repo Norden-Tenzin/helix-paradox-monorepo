@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Search } from '@lucide/svelte';
-	import { apiErrorMessage, type CharacterPage, type Mod, type Sex, type TagSummary } from '#lib/api.ts';
+	import { apiErrorMessage, type CharacterPage, type Mod, type Sex, type Sort, type TagSummary } from '#lib/api.ts';
 	import { characterListPath, filtersToParams, readFilters, type Filters, type ListScope } from '#lib/filters.ts';
 	import { button, field } from '#lib/ui.ts';
 	import CharacterCard from './CharacterCard.svelte';
@@ -71,7 +71,10 @@
 			const response = await fetch(characterListPath(filters, scope, cursor));
 			if (!response.ok) throw new Error(await apiErrorMessage(response));
 			const next: CharacterPage = await response.json();
-			results = [...results, ...next.page];
+			// Popular order can shift while someone scrolls (a favourite lands between pages), so a
+			// character may come round twice; show it once.
+			const seen = new Set(results.map((c) => c.id));
+			results = [...results, ...next.page.filter((c) => !seen.has(c.id))];
 			cursor = next.nextCursor;
 		} catch (err) {
 			loadError = err instanceof Error ? err.message : 'Could not load more characters.';
@@ -87,6 +90,11 @@
 
 	const toggle =
 		'h-10 px-4 text-small font-medium transition-colors aria-pressed:bg-ink aria-pressed:text-ground bg-surface text-ink hover:bg-raised';
+	const sortOptions: { label: string; value: Sort; title: string }[] = [
+		{ label: 'Newest', value: 'newest', title: 'Newest first' },
+		{ label: 'Popular', value: 'popular', title: 'Most favourited this week, then of all time' },
+		{ label: 'Oldest', value: 'oldest', title: 'Oldest first' }
+	];
 	const sexOptions: { label: string; value: Sex | undefined }[] = [
 		{ label: 'Anyone', value: undefined },
 		{ label: 'Women', value: 'female' },
@@ -105,7 +113,7 @@
 				applyFilters({ q: searchText.trim() });
 			}}
 		>
-			<input class="{field} h-10" placeholder="Search by name or author" aria-label="Search" bind:value={searchText} />
+			<input class="{field} h-10" placeholder="Search names, authors, tags, mods" aria-label="Search" bind:value={searchText} />
 			<button type="submit" class="{button('solid', 'sm')} w-12 px-0" aria-label="Search"><Search /></button>
 		</form>
 
@@ -124,13 +132,19 @@
 					</button>
 				{/each}
 			</div>
-			<button
-				type="button"
-				class="{toggle} bg-transparent hover:bg-surface"
-				onclick={() => applyFilters({ sort: filters.sort === 'newest' ? 'oldest' : 'newest' })}
-			>
-				{filters.sort === 'newest' ? 'Newest first' : 'Oldest first'}
-			</button>
+			<div class="flex gap-px" role="group" aria-label="Order">
+				{#each sortOptions as option (option.value)}
+					<button
+						type="button"
+						class={toggle}
+						aria-pressed={filters.sort === option.value}
+						title={option.title}
+						onclick={() => applyFilters({ sort: option.value })}
+					>
+						{option.label}
+					</button>
+				{/each}
+			</div>
 		</div>
 	</div>
 

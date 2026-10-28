@@ -1,16 +1,17 @@
-import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { requireUser, viewer as whoIsAsking, viewerId, type AppEnv } from "../context";
 import type { Db } from "../db";
 import { characterMods, characters, characterTags, favourites, mods, reports, tags, user } from "../db/schema";
-import { dnaFingerprint, guessMods, MIN_GENES, parseDna } from "../dna";
+import { dnaFingerprint, faceDistance, faceFeatures, guessMods, MIN_GENES, parseDna } from "../dna";
 import { BASE_MOD, DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
 import { deleteImages, imageUrl, MAX_GRID_IMAGES, putImage, toStoredValue, validateImage } from "../images";
 import { gameMods, namedMod, signatures } from "../mods";
 import { hideIfReportedEnough, visibleTo } from "../reports";
 import { recountTags, resolveTags } from "../tags";
+import { recordView } from "../views";
 import { REPORT_REASONS, type Character, type CharacterPage, type FavouriteState, type Mod, type ReportReason, type Tag } from "../types";
 
 const DEFAULT_LIMIT = 12;
@@ -32,7 +33,7 @@ const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
   /** "mine": the signed-in person's favourites, most recently favourited first. */
   favourites: z.literal("mine").optional(),
-  sort: z.enum(["newest", "oldest"]).default("newest"),
+  sort: z.enum(["newest", "oldest", "popular"]).default("newest"),
   cursor: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
 });
@@ -193,7 +194,7 @@ async function resolveDnaAndMods(db: Db, fields: CharacterFields, userId: string
   if (chosen.includes(BASE_MOD) && chosen.length > 1) {
     throw new HTTPException(400, { message: "Vanilla can't be combined with other mods" });
   }
-  return { mods: chosen, dnaHash: await dnaFingerprint(fields.dna) };
+  return { mods: chosen, dnaHash: await dnaFingerprint(fields.dna), features: faceFeatures(fields.dna) };
 }
 
 async function getCharacter(db: Db, id: string) {
@@ -296,9 +297,18 @@ export const characterRoutes = new Hono<AppEnv>()
     if (author) conditions.push(eq(characters.authorId, author));
     if (sex) conditions.push(eq(characters.sex, sex));
     if (q) {
+      // A character's name, its author, or the name of one of its tags or mods. (Subqueries
+      // spell out table names: drizzle leaves columns unqualified inside them.)
       const pattern = `%${escapeLike(q)}%`;
       conditions.push(
-        or(sql`${characters.name} like ${pattern} escape '\\'`, sql`${user.username} like ${pattern} escape '\\'`),
+        or(
+          sql`${characters.name} like ${pattern} escape '\\'`,
+          sql`${user.username} like ${pattern} escape '\\'`,
+          sql`exists (select 1 from "character_tags" join "tags" on "tags"."game" = "characters"."game" and "tags"."id" = "character_tags"."tag"
+            where "character_tags"."cid" = "characters"."id" and "tags"."name" like ${pattern} escape '\\')`,
+          sql`exists (select 1 from "character_mods" join "mods" on "mods"."game" = "characters"."game" and "mods"."id" = "character_mods"."mod"
+            where "character_mods"."cid" = "characters"."id" and "mods"."name" like ${pattern} escape '\\')`,
+        ),
       );
     }
     if (mods.length > 0) {
@@ -332,6 +342,17 @@ export const characterRoutes = new Hono<AppEnv>()
     }
 
     const order = sort === "oldest" ? asc : desc;
+    // Popular: most favourited this week first, so new characters people like can climb above
+    // old ones with big totals; then all-time favourites. (Names written out in full: drizzle
+    // leaves columns unqualified inside correlated subqueries.)
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const popularFirst =
+      sort === "popular"
+        ? [
+            desc(sql`(select count(*) from "favourites" where "favourites"."character_id" = "characters"."id" and "favourites"."created_at" > ${weekAgo})`),
+            desc(characters.favouriteCount),
+          ]
+        : [];
     const where = and(...conditions);
     // Favourites list only the viewer's, ordered by when they favourited each one.
     const mine = and(eq(favourites.characterId, characters.id), eq(favourites.userId, viewer ?? ""));
@@ -340,7 +361,12 @@ export const characterRoutes = new Hono<AppEnv>()
     const [rows, [{ total }]] = await Promise.all([
       (favouritesOf ? rowsQuery.innerJoin(favourites, mine) : rowsQuery)
         .where(where)
-        .orderBy(...(favouritesOf ? [desc(favourites.createdAt)] : []), order(characters.postedAt), order(characters.id))
+        .orderBy(
+          ...(favouritesOf ? [desc(favourites.createdAt)] : []),
+          ...popularFirst,
+          order(characters.postedAt),
+          order(characters.id),
+        )
         .limit(limit + 1)
         .offset(cursor),
       (favouritesOf ? totalQuery.innerJoin(favourites, mine) : totalQuery).where(where),
@@ -381,6 +407,56 @@ export const characterRoutes = new Hono<AppEnv>()
       recountFavourites(db, id),
     ]);
     return c.json(await favouriteState(db, id, c.var.user.id));
+  })
+
+  // "More like this": the visible characters from the same game whose faces are closest. Compared
+  // in the worker against every candidate's stored features, which is fine for a library of
+  // thousands; past that, a vector index (Cloudflare Vectorize) does the same job.
+  .get("/:id/similar", async (c) => {
+    const id = c.req.param("id");
+    const db = c.var.db;
+    const asking = await whoIsAsking(c);
+    const limit = Math.min(12, Math.max(1, Number(c.req.query("limit")) || 5));
+    const [target] = await db
+      .select({ game: characters.game, features: characters.features })
+      .from(characters)
+      .where(and(eq(characters.id, id), visibleTo(asking?.id ?? null)));
+    if (!target) throw new HTTPException(404, { message: "Character not found" });
+    if (!target.features) return c.json([] satisfies Character[]);
+
+    const candidates = await db
+      .select({ id: characters.id, features: characters.features })
+      .from(characters)
+      .where(and(eq(characters.game, target.game), isNull(characters.hiddenAt), ne(characters.id, id), isNotNull(characters.features)));
+    const nearest = candidates
+      .map((cand) => ({ id: cand.id, distance: faceDistance(target.features!, cand.features!) }))
+      .filter((cand) => Number.isFinite(cand.distance))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, limit);
+    if (nearest.length === 0) return c.json([] satisfies Character[]);
+
+    const rows = await db
+      .select(characterColumns)
+      .from(characters)
+      .innerJoin(user, eq(user.id, characters.authorId))
+      .where(inArray(characters.id, nearest.map((n) => n.id)));
+    const order = new Map(nearest.map((n, i) => [n.id, i]));
+    rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+    return c.json(await enrich(db, rows, asking?.id ?? null));
+  })
+
+  // The character page calls this once it has loaded in a browser, so server-side page loads,
+  // prefetching and link previews don't count. Not shown anywhere yet.
+  .post("/:id/view", async (c) => {
+    const id = c.req.param("id");
+    const asking = await whoIsAsking(c);
+    const [exists] = await c.var.db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(and(eq(characters.id, id), visibleTo(asking?.id ?? null)));
+    if (!exists) throw new HTTPException(404, { message: "Character not found" });
+    await recordView(c.var.db, c.env.BETTER_AUTH_SECRET, id, c.req.raw, asking?.id ?? null);
+    return c.body(null, 204);
   })
 
   // One report per person per character; reporting again replaces the reason. Enough open
@@ -435,6 +511,7 @@ export const characterRoutes = new Hono<AppEnv>()
           description: fields.description,
           dna: fields.dna,
           dnaHash: resolved.dnaHash,
+          features: resolved.features,
           authorId: c.var.user.id,
           postedAt: now,
           updatedAt: now,
@@ -473,6 +550,7 @@ export const characterRoutes = new Hono<AppEnv>()
             description: fields.description,
             dna: fields.dna,
             dnaHash: resolved.dnaHash,
+            features: resolved.features,
             displayImage: images.displayImage,
             gridImages: images.gridImages,
             updatedAt: Date.now(),

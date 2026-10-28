@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import type { FaceFeatures } from "../dna";
 import { REPORT_REASONS } from "../types";
 
 // ==================== AUTH (Better Auth) ====================
@@ -89,9 +90,13 @@ export const characters = sqliteTable(
     dna: text("dna").notNull(),
     // dnaFingerprint() of the DNA, to spot the same face shared twice. Null until backfilled.
     dnaHash: text("dna_hash"),
+    // faceFeatures() of the DNA, for "more like this". Null until backfilled.
+    features: text("features", { mode: "json" }).$type<FaceFeatures>(),
     // How many people favourited it. Always recounted from `favourites` when one is added or
     // removed (never nudged by ±1), so it can't drift.
     favouriteCount: integer("favourite_count").notNull().default(0),
+    // How many times it's been viewed, at most once per person per day (views.ts). Not shown yet.
+    viewCount: integer("view_count").notNull().default(0),
     // Set when enough people report it (see reports.ts); hidden from everyone but its owner
     // until someone reviews the reports. Null when visible.
     hiddenAt: integer("hidden_at"),
@@ -184,6 +189,22 @@ export const favourites = sqliteTable(
     index("favourites_character_idx").on(t.characterId),
     index("favourites_user_created_idx").on(t.userId, t.createdAt),
   ],
+);
+
+// Who has viewed which character today, only to count each person once a day; earlier days'
+// rows are pruned as views come in. `viewer` is a user id, or for signed-out visitors a hash that changes
+// daily (never an IP address).
+export const characterViews = sqliteTable(
+  "character_views",
+  {
+    characterId: text("character_id")
+      .notNull()
+      .references(() => characters.id, { onDelete: "cascade" }),
+    viewer: text("viewer").notNull(),
+    day: integer("day").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.characterId, t.viewer, t.day] }), index("character_views_day_idx").on(t.day)],
 );
 
 // Someone telling us a character is broken or doesn't belong. One per person per character:

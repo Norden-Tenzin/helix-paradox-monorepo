@@ -3,7 +3,7 @@
 //   node scripts/set-role.mts --remote someone@example.com admin
 //   node scripts/set-role.mts --local  someone@example.com user
 //
-// Anything after `--` is passed on to `wrangler d1 execute` (as in backfill-dna-hash.mts).
+// Anything after `--` is passed on to `wrangler d1 execute` (as in backfill-dna.mts).
 // The person needs to sign in again (or wait for their session to refresh) to see the change.
 
 import { execFileSync } from "node:child_process";

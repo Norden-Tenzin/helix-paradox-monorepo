@@ -117,3 +117,62 @@ export function guessMods(genes: Gene[], base: ModSignature, mods: ModSignature[
     unknownGenes,
   };
 }
+
+/**
+ * A face as numbers, for finding similar ones. Each gene's values become -1…1: a template ending
+ * in "_neg" ("chin_forward_neg") points the other way to its "_pos" partner, so a receding chin
+ * and a jutting one end up far apart rather than both "high". Colour genes keep every number.
+ * Templates themselves are kept too, so two different hairstyles at the same slider aren't "alike".
+ */
+export interface FaceFeatures {
+  /** Gene → its values, -1…1. */
+  v: Record<string, number[]>;
+  /** Gene → its first template, where it has one. */
+  t: Record<string, string>;
+}
+
+export function faceFeatures(dna: string): FaceFeatures {
+  const features: FaceFeatures = { v: {}, t: {} };
+  for (const [, name, body] of genesBlock(dna).matchAll(GENE_PATTERN)) {
+    const parts = [...body.matchAll(/"([^"]*)"|(-?\d+(?:\.\d+)?)/g)];
+    const values: number[] = [];
+    let sign = 1;
+    for (const [, template, number] of parts) {
+      if (template !== undefined) {
+        sign = /_neg$/.test(template) ? -1 : 1;
+        if (!(name in features.t)) features.t[name] = template;
+      } else values.push(Math.round(((sign * clampByte(Number(number))) / 255) * 1000) / 1000);
+    }
+    if (values.length > 0) features.v[name] = values;
+  }
+  return features;
+}
+
+/** How much a gene counts toward two faces looking alike: face shape most, outfits least. */
+function similarityWeight(name: string) {
+  if (/clothes|hairstyle|beard|accessory|bald|body_hair|eyelash/.test(name)) return 0.25;
+  const region = geneRegion(name);
+  return region === "Body" ? 0.5 : region === "Hair & skin" ? 0.75 : 1;
+}
+
+/**
+ * How far apart two faces are, 0 (identical) upwards, over the genes both have. Infinity when they
+ * share too few genes to compare (different games, or a string cut short).
+ */
+export function faceDistance(a: FaceFeatures, b: FaceFeatures) {
+  let total = 0;
+  let weights = 0;
+  for (const [name, av] of Object.entries(a.v)) {
+    const bv = b.v[name];
+    if (!bv) continue;
+    const w = similarityWeight(name);
+    const n = Math.min(av.length, bv.length);
+    let sq = 0;
+    for (let i = 0; i < n; i++) sq += (av[i] - bv[i]) ** 2;
+    // Values span -1…1, so a squared gap is at most 4; a different template counts as the most.
+    const templateGap = a.t[name] !== undefined && b.t[name] !== undefined && a.t[name] !== b.t[name] ? 1 : 0;
+    total += w * ((sq / n / 4) * 0.7 + templateGap * 0.3);
+    weights += w;
+  }
+  return weights < MIN_GENES ? Infinity : Math.sqrt(total / weights);
+}
