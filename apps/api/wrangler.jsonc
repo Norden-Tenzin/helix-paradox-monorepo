@@ -14,13 +14,15 @@
       "binding": "DB",
       "database_name": "helix-db",
       "database_id": "855c8942-7646-4f81-8e05-55ddafa174c5",
-      "migrations_dir": "migrations"
+      "migrations_dir": "migrations",
+      "remote": true
     }
   ],
   "r2_buckets": [
     {
       "binding": "BUCKET",
-      "bucket_name": "helix-images"
+      "bucket_name": "helix-images",
+      "remote": true
     }
   ]
 }
