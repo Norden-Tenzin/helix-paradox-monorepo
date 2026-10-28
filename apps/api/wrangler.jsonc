@@ -7,8 +7,14 @@
   "workers_dev": false,
   "observability": { "enabled": true },
   "vars": {
-    "BETTER_AUTH_URL": "https://helix-paradox-website.nordentenzin29.workers.dev/"
+    "BETTER_AUTH_URL": "https://helix-paradox-website.nordentenzin29.workers.dev/",
+    // Verification emails come from here (see src/email.ts). The domain must be onboarded in
+    // Cloudflare: Compute > Email Service > Email Sending.
+    "EMAIL_FROM": "noreply@tenzinnorden.com"
   },
+  // Cloudflare Email Service. "remote": wrangler dev reaches the real service too, but local dev
+  // prints emails instead of sending them (src/email.ts).
+  "send_email": [{ "name": "EMAIL", "remote": true }],
   "d1_databases": [
     {
       "binding": "DB",

@@ -2,7 +2,5 @@
 BETTER_AUTH_SECRET=replace-with-a-long-random-string
 # Local dev overrides the production URL in wrangler.jsonc so Better Auth accepts the localhost origin.
 BETTER_AUTH_URL=http://localhost:5173
-# Optional locally: without it, verification emails are printed to this worker's console.
-# In production both are required: `wrangler secret put RESEND_API_KEY`, and EMAIL_FROM on a domain verified in Resend.
-# RESEND_API_KEY=re_...
-# EMAIL_FROM=Helix Paradox <noreply@your-domain.com>
+# Emails go through Cloudflare Email Service (the EMAIL binding in wrangler.jsonc); no key needed.
+# With BETTER_AUTH_URL on localhost, verification emails are printed to this worker's console instead.

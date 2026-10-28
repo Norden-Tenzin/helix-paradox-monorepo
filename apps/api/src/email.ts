@@ -1,14 +1,10 @@
-// Sends the site's emails (for now, only "verify your email") through Resend's HTTP API.
+// Sends the site's emails (for now, only "verify your email") with Cloudflare Email Service,
+// through the EMAIL binding in wrangler.jsonc, from EMAIL_FROM. The sender's domain must be
+// onboarded in Cloudflare (Compute > Email Service > Email Sending), and sending to any address
+// needs the Workers Paid plan.
 //
-// Set RESEND_API_KEY with `wrangler secret put RESEND_API_KEY`, and EMAIL_FROM to an address on a
-// domain verified in Resend, e.g. "Helix Paradox <noreply@helix.example.com>". Without a key, local
-// dev prints each email (and its link) to the worker's console instead of sending it.
-
-export interface EmailEnv {
-  BETTER_AUTH_URL: string;
-  RESEND_API_KEY?: string;
-  EMAIL_FROM?: string;
-}
+// Local dev prints each email (and its link) to the worker's console instead of sending it, so
+// testing sign-up never emails anyone.
 
 export interface Email {
   to: string;
@@ -17,26 +13,31 @@ export interface Email {
   html: string;
 }
 
-const isLocal = (env: EmailEnv) => /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(env.BETTER_AUTH_URL);
+const isLocal = (env: Env) => /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(env.BETTER_AUTH_URL);
 
-export async function sendEmail(env: EmailEnv, email: Email) {
-  if (!env.RESEND_API_KEY) {
-    if (!isLocal(env)) throw new Error("RESEND_API_KEY is not set, so emails can't be sent");
+export async function sendEmail(env: Env, email: Email) {
+  if (isLocal(env)) {
     console.log(`\n[email] To: ${email.to}\n[email] Subject: ${email.subject}\n${email.text}\n`);
     return;
   }
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      from: env.EMAIL_FROM ?? "Helix Paradox <onboarding@resend.dev>",
+  try {
+    await env.EMAIL.send({
+      from: { email: env.EMAIL_FROM, name: "Helix Paradox" },
       to: email.to,
       subject: email.subject,
       text: email.text,
       html: email.html,
-    }),
-  });
-  if (!response.ok) throw new Error(`Resend refused the email (${response.status}): ${await response.text()}`);
+    });
+  } catch (err) {
+    // Usually a code like E_SENDER_NOT_VERIFIED. Before the domain is onboarded for Email Sending,
+    // the binding acts like Email Routing and refuses any address that isn't a verified one:
+    // "destination address is not a verified address".
+    // Better Auth catches this and logs it rather than failing the sign-up, so the person sees
+    // "check your inbox" either way; signing in later sends a fresh link.
+    const { code, message } = err as { code?: string; message?: string };
+    console.error(`Email to ${email.to} failed: ${code ?? message ?? err}`);
+    throw err;
+  }
 }
 
 const escapeHtml = (s: string) =>

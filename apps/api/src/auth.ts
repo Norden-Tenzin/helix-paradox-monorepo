@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { username } from "better-auth/plugins";
 import type { Db } from "./db";
 import { schema } from "./db";
-import { sendEmail, verificationEmail, type EmailEnv } from "./email";
+import { sendEmail, verificationEmail } from "./email";
 
 export function createAuth(env: Env, db: Db) {
   return betterAuth({
@@ -21,7 +21,7 @@ export function createAuth(env: Env, db: Db) {
       autoSignInAfterVerification: true,
       expiresIn: 60 * 60 * 24,
       sendVerificationEmail: async ({ user, url }) => {
-        await sendEmail(env as Env & EmailEnv, verificationEmail(user.email, user.name, url));
+        await sendEmail(env, verificationEmail(user.email, user.name, url));
       },
     },
     user: {
