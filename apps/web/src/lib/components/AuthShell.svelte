@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import ImageCredit from './ImageCredit.svelte';
 
 	let { title, intro, children }: { title: string; intro: string; children: Snippet } = $props();
 </script>
@@ -13,6 +14,9 @@
 			height="838"
 			class="drift absolute inset-0 h-full w-full object-cover object-[48%_50%]"
 		/>
+		<ImageCredit href="https://commons.wikimedia.org/wiki/File:Bayeux_Tapestry_scene23_Harold_oath_William.jpg">
+			Bayeux Tapestry, 1070s. Photo by Myrabella, public domain.
+		</ImageCredit>
 	</div>
 	<div class="wrap flex flex-col justify-center py-16 lg:col-span-5 lg:col-start-8 lg:py-24">
 		<h1 class="text-head">{title}</h1>

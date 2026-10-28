@@ -9,7 +9,7 @@
 
 	let { user }: { user: Me | null } = $props();
 
-	// On the home page the bar sits over the tapestry and the name below is the logo.
+	// On the home page the bar sits over the tapestry, on a scrim so it reads against the stitching.
 	const overPicture = $derived(page.url.pathname === '/');
 	const shareHref = $derived(user ? '/upload' : `/sign-up?redirect=${encodeURIComponent('/upload')}`);
 	const signInHref = $derived(`/sign-in?redirect=${encodeURIComponent(page.url.pathname + page.url.search)}`);
@@ -31,15 +31,11 @@
 
 <header
 	class={overPicture
-		? 'absolute inset-x-0 top-0 z-20 text-ground'
+		? 'scrim absolute inset-x-0 top-0 z-20 text-ink'
 		: 'sticky top-0 z-20 bg-ground text-ink'}
 >
-	<nav class="wrap flex h-16 items-center gap-6 text-[0.9375rem]" aria-label="Main">
-		{#if !overPicture}
-			<a href="/" class="mr-auto text-lead font-semibold tracking-[-0.03em]">Helix Paradox</a>
-		{:else}
-			<span class="mr-auto"></span>
-		{/if}
+	<nav class="wrap flex h-16 items-center gap-4 text-[0.9375rem] sm:gap-6" aria-label="Main">
+		<a href="/" class="mr-auto text-lead font-semibold tracking-[-0.03em] max-sm:text-body">Helix Paradox</a>
 
 		<a href="/characters" class="nav-link" aria-current={current('/characters')}>Library</a>
 		<a href={shareHref} class="nav-link" aria-current={current('/upload')}>
@@ -71,6 +67,16 @@
 </header>
 
 <style>
+	.scrim {
+		background: linear-gradient(
+			to bottom,
+			color-mix(in oklab, var(--bg) 88%, transparent),
+			color-mix(in oklab, var(--bg) 55%, transparent) 60%,
+			transparent
+		);
+		padding-bottom: 2.5rem;
+		text-shadow: 0 1px 12px color-mix(in oklab, var(--bg) 70%, transparent);
+	}
 	:global(.nav-link) {
 		position: relative;
 		padding-block: 0.5rem;

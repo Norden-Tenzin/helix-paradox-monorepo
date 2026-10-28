@@ -107,8 +107,8 @@
 			{/if}
 		</p>
 
-		<div class="mt-10">
-			<Strand dna={character.dna} interactive class="h-28" />
+		<div class="gel-ground mt-10 px-4 pt-4 pb-3">
+			<Strand dna={character.dna} variant="map" interactive />
 		</div>
 	</div>
 

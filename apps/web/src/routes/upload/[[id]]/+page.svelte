@@ -286,7 +286,7 @@
 					<p class="mt-2 text-small text-muted">{geneCount} genes read.</p>
 				{/if}
 				{#if geneCount > 0}
-					<div class="mt-5"><Strand {dna} interactive class="h-24" /></div>
+					<div class="mt-5"><Strand {dna} interactive class="h-32" /></div>
 				{/if}
 			</div>
 

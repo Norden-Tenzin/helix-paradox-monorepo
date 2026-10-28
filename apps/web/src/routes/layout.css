@@ -95,14 +95,24 @@
 		padding-inline: var(--margin);
 	}
 
-	/* The name, set as architecture. Sized so "Helix Paradox" fills the width on one line. */
+	/* The name, set as architecture. Sized so "Helix Paradox" fills the measure between the page
+	   margins on one line: the set line is 5.19em wide, counting the last glyph's overhang past
+	   the negative tracking, which the end padding gives back. Its parent must be an @container
+	   spanning the page; --monument-em is the line's width in ems (3.25 when stacked on phones). */
 	.monument {
+		--monument-em: 5.2;
 		font-weight: 600;
-		font-size: clamp(3.5rem, 18.6vw, 24rem);
+		font-size: min(24rem, calc((100cqi - 2 * var(--margin)) / var(--monument-em)));
 		letter-spacing: -0.055em;
 		line-height: 0.82;
 		white-space: nowrap;
+		padding-inline-end: 0.055em;
 		font-variation-settings: 'opsz' 96;
+	}
+
+	/* The deep blue of a lit sequencing gel, behind DNA drawn in dye colours. */
+	.gel-ground {
+		background: linear-gradient(to bottom, #0b2d66, #071d45);
 	}
 
 	.link {

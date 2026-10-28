@@ -11,3 +11,6 @@ node_modules
 /website
 .taste-skill
 dist
+
+# Working notes and roadmaps, kept locally
+/plans

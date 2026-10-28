@@ -38,7 +38,26 @@ export function geneLabel(name: string) {
 	return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-const clampByte = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+/** The part of the face (or body) a gene shapes, in the order a face map reads, top to bottom. */
+export const REGIONS = ['Head', 'Brow', 'Eyes', 'Nose', 'Cheeks', 'Mouth', 'Jaw', 'Body', 'Hair & skin'] as const;
+export type Region = (typeof REGIONS)[number];
+
+const REGION_PATTERNS: [RegExp, Region][] = [
+	[/hair|eyebrow|eyelash|beard|bald|skin_color|eye_color|complexion|accessory/, 'Hair & skin'],
+	[/forehead|brow|expression/, 'Brow'],
+	[/eye/, 'Eyes'],
+	[/nose|nasolabial/, 'Nose'],
+	[/mouth|teeth/, 'Mouth'],
+	[/chin|jaw/, 'Jaw'],
+	[/cheek|ear|temple/, 'Cheeks'],
+	[/head|neck/, 'Head']
+];
+
+export function geneRegion(name: string): Region {
+	return REGION_PATTERNS.find(([pattern]) => pattern.test(name))?.[1] ?? 'Body';
+}
+
+const clampByte =(n: number) => Math.max(0, Math.min(255, Math.round(n)));
 
 /** The first `lines` entries of a DNA string, one per line and indented by depth (game exports vary in layout). */
 export function formatDnaPreview(dna: string, lines: number) {
