@@ -1,6 +1,17 @@
 import { error } from '@sveltejs/kit';
 
-export type { Character, CharacterPage, DnaReport, GameId, Me, Mod, PublicUser, Sex, Sort } from 'api/types';
+export type {
+	Character,
+	CharacterPage,
+	DnaReport,
+	FavouriteState,
+	GameId,
+	Me,
+	Mod,
+	PublicUser,
+	Sex,
+	Sort
+} from 'api/types';
 
 /** Reads the `{ error }` body the API sends on failure. */
 export async function apiErrorMessage(response: Response) {

@@ -85,6 +85,9 @@ export const characters = sqliteTable(
     dna: text("dna").notNull(),
     // dnaFingerprint() of the DNA, to spot the same face shared twice. Null until backfilled.
     dnaHash: text("dna_hash"),
+    // How many people favourited it. Always recounted from `favourites` when one is added or
+    // removed (never nudged by ±1), so it can't drift.
+    favouriteCount: integer("favourite_count").notNull().default(0),
     // R2 object key, or an absolute URL for legacy images.
     displayImage: text("display_image").notNull(),
     gridImages: text("grid_images", { mode: "json" }).$type<string[]>().notNull().default([]),
@@ -135,6 +138,26 @@ export const characterTags = sqliteTable(
     tag: text("tag").notNull(),
   },
   (t) => [primaryKey({ columns: [t.cid, t.tag] }), index("character_tags_tag_idx").on(t.tag)],
+);
+
+// One row per person per character they favourited, so favouriting twice is a no-op. Who
+// favourited what is private: only the count is public.
+export const favourites = sqliteTable(
+  "favourites",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    characterId: text("character_id")
+      .notNull()
+      .references(() => characters.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.characterId] }),
+    index("favourites_character_idx").on(t.characterId),
+    index("favourites_user_created_idx").on(t.userId, t.createdAt),
+  ],
 );
 
 export const charactersRelations = relations(characters, ({ one, many }) => ({

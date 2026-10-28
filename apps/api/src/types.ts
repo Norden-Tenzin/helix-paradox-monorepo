@@ -29,6 +29,15 @@ export interface Character {
   grid_images: string[];
   mods: Mod[];
   tags: string[];
+  favourite_count: number;
+  /** Whether the person asking has favourited it (always false when signed out). */
+  favourited: boolean;
+}
+
+/** After favouriting or unfavouriting (PUT/DELETE /api/characters/:id/favourite). */
+export interface FavouriteState {
+  favourited: boolean;
+  favourite_count: number;
 }
 
 export interface CharacterPage {

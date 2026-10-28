@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { apiErrorMessage } from '#lib/api.ts';
 	import CharacterGrid from '#lib/components/CharacterGrid.svelte';
+	import ProfileTabs from '#lib/components/ProfileTabs.svelte';
 	import { button } from '#lib/ui.ts';
 	import type { PageProps } from './$types';
 
@@ -33,10 +34,12 @@
 	{/if}
 </header>
 
+{#if isMyProfile}<ProfileTabs userId={data.profile.id} />{/if}
+
 <CharacterGrid
 	initial={data.characters}
 	mods={data.mods}
-	authorId={data.profile.id}
+	scope={{ author: data.profile.id }}
 	isOwner={isMyProfile}
 	onDelete={handleDelete}
 	emptyMessage={isMyProfile ? "You haven't shared a character yet." : 'Nothing shared yet.'}

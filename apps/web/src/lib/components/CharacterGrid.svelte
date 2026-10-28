@@ -3,14 +3,14 @@
 	import { page } from '$app/state';
 	import { Search } from '@lucide/svelte';
 	import { apiErrorMessage, type CharacterPage, type Mod, type Sex } from '#lib/api.ts';
-	import { characterListPath, filtersToParams, readFilters, type Filters } from '#lib/filters.ts';
+	import { characterListPath, filtersToParams, readFilters, type Filters, type ListScope } from '#lib/filters.ts';
 	import { button, field } from '#lib/ui.ts';
 	import CharacterCard from './CharacterCard.svelte';
 
 	let {
 		initial,
 		mods,
-		authorId,
+		scope,
 		isOwner = false,
 		onDelete,
 		emptyMessage = 'No characters match these filters.'
@@ -18,7 +18,8 @@
 		initial: CharacterPage;
 		/** The mods to offer as filters (GET /api/mods). */
 		mods: Mod[];
-		authorId?: string;
+		/** Whose characters these are; matches what the page loaded `initial` with. */
+		scope?: ListScope;
 		isOwner?: boolean;
 		onDelete?: (id: string) => Promise<void>;
 		emptyMessage?: string;
@@ -52,7 +53,7 @@
 		loadingMore = true;
 		loadError = '';
 		try {
-			const response = await fetch(characterListPath(filters, authorId, cursor));
+			const response = await fetch(characterListPath(filters, scope, cursor));
 			if (!response.ok) throw new Error(await apiErrorMessage(response));
 			const next: CharacterPage = await response.json();
 			results = [...results, ...next.page];

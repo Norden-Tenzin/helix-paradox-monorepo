@@ -1,3 +1,4 @@
+import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import type { Auth, SessionUser } from "./auth";
@@ -19,6 +20,13 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   c.set("user", session.user);
   await next();
 });
+
+/** The signed-in user's id on routes anyone may call, or null. Skips the session lookup without a cookie. */
+export async function viewerId(c: Context<AppEnv>) {
+  if (!c.req.header("cookie")) return null;
+  const session = await c.var.auth.api.getSession({ headers: c.req.raw.headers });
+  return session?.user.id ?? null;
+}
 
 export function displayName(u: { displayUsername?: string | null; username?: string | null; name: string }) {
   return u.displayUsername || u.username || u.name;

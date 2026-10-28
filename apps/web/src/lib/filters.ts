@@ -29,10 +29,14 @@ export function filtersToParams(filters: Filters) {
 	return params;
 }
 
-/** API path for listing characters, optionally scoped to one author. */
-export function characterListPath(filters: Filters, author?: string, cursor?: string) {
+/** Which characters a list shows: everyone's, one author's, or the signed-in person's favourites. */
+export type ListScope = { author: string } | { favourites: true } | undefined;
+
+/** API path for listing characters in a scope. */
+export function characterListPath(filters: Filters, scope?: ListScope, cursor?: string) {
 	const params = filtersToParams(filters);
-	if (author) params.set('author', author);
+	if (scope && 'author' in scope) params.set('author', scope.author);
+	if (scope && 'favourites' in scope) params.set('favourites', 'mine');
 	if (cursor) params.set('cursor', cursor);
 	return `/api/characters?${params}`;
 }

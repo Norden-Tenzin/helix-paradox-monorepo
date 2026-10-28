@@ -18,12 +18,17 @@
 		error = '';
 		loading = true;
 		const id = identifier.trim();
+		const callbackURL = `/verify?redirect=${encodeURIComponent(redirectTo)}`;
 		const result = id.includes('@')
-			? await authClient.signIn.email({ email: id, password })
-			: await authClient.signIn.username({ username: id, password });
+			? await authClient.signIn.email({ email: id, password, callbackURL })
+			: await authClient.signIn.username({ username: id, password, callbackURL });
 		loading = false;
 		if (result.error) {
-			error = result.error.message ?? 'Sign in failed. Check your details and try again.';
+			// Signing in before confirming sends a fresh link (emailVerification.sendOnSignIn).
+			error =
+				result.error.code === 'EMAIL_NOT_VERIFIED'
+					? 'Confirm your email first. We’ve sent you a new link; open it to finish signing in.'
+					: (result.error.message ?? 'Sign in failed. Check your details and try again.');
 			return;
 		}
 		await goto(redirectTo, { refreshAll: true });

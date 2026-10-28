@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Check, Copy } from '@lucide/svelte';
+	import FavouriteButton from '#lib/components/FavouriteButton.svelte';
 	import Strand from '#lib/components/Strand.svelte';
 	import { parseDna } from '#lib/dna.ts';
 	import { button } from '#lib/ui.ts';
@@ -94,6 +95,12 @@
 			<button class={button('accent')} onclick={copyDna}>
 				{#if copied}<Check /> Copied{:else}<Copy /> Copy DNA{/if}
 			</button>
+			<FavouriteButton
+				id={character.id}
+				count={character.favourite_count}
+				favourited={character.favourited}
+				signedIn={!!data.user}
+			/>
 			{#if isOwner}
 				<a href="/upload/{character.id}" class="link text-body">Edit</a>
 			{/if}

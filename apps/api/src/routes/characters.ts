@@ -2,14 +2,14 @@ import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-o
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { requireUser, type AppEnv } from "../context";
+import { requireUser, viewerId, type AppEnv } from "../context";
 import type { Db } from "../db";
-import { characterMods, characters, characterTags, mods, user } from "../db/schema";
+import { characterMods, characters, characterTags, favourites, mods, user } from "../db/schema";
 import { dnaFingerprint, guessMods, MIN_GENES, parseDna } from "../dna";
 import { BASE_MOD, DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
 import { deleteImages, imageUrl, MAX_GRID_IMAGES, putImage, toStoredValue, validateImage } from "../images";
 import { gameMods, namedMod, signatures } from "../mods";
-import type { Character, CharacterPage, Mod } from "../types";
+import type { Character, CharacterPage, FavouriteState, Mod } from "../types";
 
 const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 48;
@@ -23,6 +23,8 @@ const listQuery = z.object({
     .optional()
     .transform((v) => (v ? [...new Set(v.split(",").map((m) => m.trim().toLowerCase()).filter(Boolean))] : [])),
   q: z.string().trim().max(100).optional(),
+  /** "mine": the signed-in person's favourites, most recently favourited first. */
+  favourites: z.literal("mine").optional(),
   sort: z.enum(["newest", "oldest"]).default("newest"),
   cursor: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
@@ -60,14 +62,16 @@ const characterColumns = {
   updated_at: characters.updatedAt,
   display_image: characters.displayImage,
   grid_images: characters.gridImages,
+  favourite_count: characters.favouriteCount,
 };
 
-type CharacterRow = Omit<Character, "mods" | "tags" | "game"> & { game: string };
+type CharacterRow = Omit<Character, "mods" | "tags" | "game" | "favourited"> & { game: string };
 
-async function enrich(db: Db, rows: CharacterRow[]): Promise<Character[]> {
+/** Adds mods, tags and, for a signed-in viewer, whether they favourited each one. */
+async function enrich(db: Db, rows: CharacterRow[], viewer: string | null): Promise<Character[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [modRows, tags] = await Promise.all([
+  const [modRows, tags, mine] = await Promise.all([
     db
       .select({ cid: characterMods.cid, id: mods.id, name: mods.name, status: mods.status })
       .from(characterMods)
@@ -75,7 +79,14 @@ async function enrich(db: Db, rows: CharacterRow[]): Promise<Character[]> {
       .innerJoin(mods, and(eq(mods.game, characters.game), eq(mods.id, characterMods.mod)))
       .where(inArray(characterMods.cid, ids)),
     db.select().from(characterTags).where(inArray(characterTags.cid, ids)),
+    viewer
+      ? db
+          .select({ id: favourites.characterId })
+          .from(favourites)
+          .where(and(eq(favourites.userId, viewer), inArray(favourites.characterId, ids)))
+      : Promise.resolve([]),
   ]);
+  const favourited = new Set(mine.map((f) => f.id));
   return rows.map((r) => ({
     ...r,
     game: r.game as GameId,
@@ -85,7 +96,28 @@ async function enrich(db: Db, rows: CharacterRow[]): Promise<Character[]> {
       .filter((m) => m.cid === r.id)
       .map((m): Mod => ({ id: m.id, name: m.name, pending: m.status === "pending" })),
     tags: tags.filter((t) => t.cid === r.id).map((t) => t.tag),
+    favourited: favourited.has(r.id),
   }));
+}
+
+/** Recounts a character's favourites from the rows themselves, so the stored count can't drift. */
+const recountFavourites = (db: Db, id: string) =>
+  db
+    .update(characters)
+    .set({
+      favouriteCount: sql`(select count(*) from ${favourites} where ${favourites.characterId} = ${id})`,
+    })
+    .where(eq(characters.id, id));
+
+async function favouriteState(db: Db, id: string, userId: string): Promise<FavouriteState> {
+  const [[row], [mine]] = await Promise.all([
+    db.select({ count: characters.favouriteCount }).from(characters).where(eq(characters.id, id)),
+    db
+      .select({ id: favourites.characterId })
+      .from(favourites)
+      .where(and(eq(favourites.userId, userId), eq(favourites.characterId, id))),
+  ]);
+  return { favourited: !!mine, favourite_count: row?.count ?? 0 };
 }
 
 /**
@@ -205,8 +237,10 @@ export const characterRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
     const parsed = listQuery.safeParse(c.req.query());
     if (!parsed.success) throw new HTTPException(400, { message: "Invalid query" });
-    const { game, author, sex, mods, q, sort, cursor, limit } = parsed.data;
+    const { game, author, sex, mods, q, favourites: favouritesOf, sort, cursor, limit } = parsed.data;
     const db = c.var.db;
+    const viewer = await viewerId(c);
+    if (favouritesOf && !viewer) throw new HTTPException(401, { message: "Sign in to see your favourites" });
 
     const conditions: (SQL | undefined)[] = [];
     if (game) conditions.push(eq(characters.game, game));
@@ -235,25 +269,22 @@ export const characterRoutes = new Hono<AppEnv>()
 
     const order = sort === "oldest" ? asc : desc;
     const where = and(...conditions);
+    // Favourites list only the viewer's, ordered by when they favourited each one.
+    const mine = and(eq(favourites.characterId, characters.id), eq(favourites.userId, viewer ?? ""));
+    const rowsQuery = db.select(characterColumns).from(characters).innerJoin(user, eq(user.id, characters.authorId)).$dynamic();
+    const totalQuery = db.select({ total: count() }).from(characters).innerJoin(user, eq(user.id, characters.authorId)).$dynamic();
     const [rows, [{ total }]] = await Promise.all([
-      db
-        .select(characterColumns)
-        .from(characters)
-        .innerJoin(user, eq(user.id, characters.authorId))
+      (favouritesOf ? rowsQuery.innerJoin(favourites, mine) : rowsQuery)
         .where(where)
-        .orderBy(order(characters.postedAt), order(characters.id))
+        .orderBy(...(favouritesOf ? [desc(favourites.createdAt)] : []), order(characters.postedAt), order(characters.id))
         .limit(limit + 1)
         .offset(cursor),
-      db
-        .select({ total: count() })
-        .from(characters)
-        .innerJoin(user, eq(user.id, characters.authorId))
-        .where(where),
+      (favouritesOf ? totalQuery.innerJoin(favourites, mine) : totalQuery).where(where),
     ]);
 
     const hasMore = rows.length > limit;
     const body: CharacterPage = {
-      page: await enrich(db, rows.slice(0, limit)),
+      page: await enrich(db, rows.slice(0, limit), viewer),
       nextCursor: hasMore ? String(cursor + limit) : null,
       total,
     };
@@ -263,8 +294,32 @@ export const characterRoutes = new Hono<AppEnv>()
   .get("/:id", async (c) => {
     const row = await getCharacter(c.var.db, c.req.param("id"));
     if (!row) throw new HTTPException(404, { message: "Character not found" });
-    const [character] = await enrich(c.var.db, [row]);
+    const [character] = await enrich(c.var.db, [row], await viewerId(c));
     return c.json(character);
+  })
+
+  // Favouriting is idempotent: doing it twice, or unfavouriting something you never favourited,
+  // changes nothing. Each change and its recount run in one batch.
+  .put("/:id/favourite", requireUser, async (c) => {
+    const id = c.req.param("id");
+    const db = c.var.db;
+    const [exists] = await db.select({ id: characters.id }).from(characters).where(eq(characters.id, id));
+    if (!exists) throw new HTTPException(404, { message: "Character not found" });
+    await db.batch([
+      db.insert(favourites).values({ userId: c.var.user.id, characterId: id, createdAt: Date.now() }).onConflictDoNothing(),
+      recountFavourites(db, id),
+    ]);
+    return c.json(await favouriteState(db, id, c.var.user.id));
+  })
+
+  .delete("/:id/favourite", requireUser, async (c) => {
+    const id = c.req.param("id");
+    const db = c.var.db;
+    await db.batch([
+      db.delete(favourites).where(and(eq(favourites.userId, c.var.user.id), eq(favourites.characterId, id))),
+      recountFavourites(db, id),
+    ]);
+    return c.json(await favouriteState(db, id, c.var.user.id));
   })
 
   .post("/", requireUser, async (c) => {

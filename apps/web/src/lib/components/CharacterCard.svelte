@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Heart } from '@lucide/svelte';
 	import { AlertDialog } from 'bits-ui';
 	import type { Character } from '#lib/api.ts';
 	import { button, dialogContent, overlay } from '#lib/ui.ts';
@@ -42,7 +43,17 @@
 	<h3 class="mt-3 line-clamp-2 text-[1.125rem] leading-tight tracking-[-0.02em]">
 		<a href="/chara/{chara.id}" class="hover:text-accent">{chara.name}</a>
 	</h3>
-	<p class="mt-1 truncate text-small text-muted">{modsLabel} · by {chara.author_name}</p>
+	<p class="mt-1 flex items-center gap-3 text-small text-muted">
+		<span class="truncate">{modsLabel} · by {chara.author_name}</span>
+		{#if chara.favourite_count > 0}
+			<span
+				class="ml-auto inline-flex shrink-0 items-center gap-1 tabular-nums"
+				title="{chara.favourite_count} {chara.favourite_count === 1 ? 'favourite' : 'favourites'}"
+			>
+				<Heart class="size-3.5" aria-hidden="true" />{chara.favourite_count}
+			</span>
+		{/if}
+	</p>
 	{#if isOwner}
 		<p class="mt-2 flex gap-4 text-small">
 			<a href="/upload/{chara.id}" class="link">Edit</a>

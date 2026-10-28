@@ -5,7 +5,7 @@ import type { PageLoad } from './$types';
 export const load: PageLoad = async ({ fetch, params, url }) => {
 	const [profile, characters, mods] = await Promise.all([
 		loadJson<PublicUser>(fetch, `/api/users/${encodeURIComponent(params.id)}`),
-		loadJson<CharacterPage>(fetch, characterListPath(readFilters(url), params.id)),
+		loadJson<CharacterPage>(fetch, characterListPath(readFilters(url), { author: params.id })),
 		loadJson<Mod[]>(fetch, '/api/mods')
 	]);
 	return { profile, characters, mods };
