@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-o
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { requireUser, viewerId, type AppEnv } from "../context";
+import { requireUser, viewer as whoIsAsking, viewerId, type AppEnv } from "../context";
 import type { Db } from "../db";
 import { characterMods, characters, characterTags, favourites, mods, reports, tags, user } from "../db/schema";
 import { dnaFingerprint, guessMods, MIN_GENES, parseDna } from "../dna";
@@ -357,12 +357,12 @@ export const characterRoutes = new Hono<AppEnv>()
 
   .get("/:id", async (c) => {
     const row = await getCharacter(c.var.db, c.req.param("id"));
-    const viewer = await viewerId(c);
-    // A hidden character is "not found" to anyone but its owner.
-    if (!row || (row.hidden_at !== null && row.author_id !== viewer)) {
+    const asking = await whoIsAsking(c);
+    // A hidden character is "not found" to anyone but its owner and admins reviewing it.
+    if (!row || (row.hidden_at !== null && row.author_id !== asking?.id && !asking?.admin)) {
       throw new HTTPException(404, { message: "Character not found" });
     }
-    const [character] = await enrich(c.var.db, [row], viewer);
+    const [character] = await enrich(c.var.db, [row], asking?.id ?? null);
     return c.json(character);
   })
 

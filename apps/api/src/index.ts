@@ -8,6 +8,7 @@ import { characterRoutes } from "./routes/characters";
 import { imageRoutes } from "./routes/images";
 import { dnaRoutes, modRoutes } from "./routes/mods";
 import { tagRoutes } from "./routes/tags";
+import { adminRoutes } from "./routes/admin";
 import { userRoutes } from "./routes/users";
 
 const app = new Hono<AppEnv>().basePath("/api");
@@ -28,6 +29,7 @@ app.route("/images", imageRoutes);
 app.route("/mods", modRoutes);
 app.route("/dna", dnaRoutes);
 app.route("/tags", tagRoutes);
+app.route("/admin", adminRoutes);
 
 app.get("/health", (c) => c.json({ ok: true }));
 

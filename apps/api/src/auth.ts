@@ -24,6 +24,10 @@ export function createAuth(env: Env, db: Db) {
         await sendEmail(env as Env & EmailEnv, verificationEmail(user.email, user.name, url));
       },
     },
+    user: {
+      // Read by requireAdmin; sign-up can't set it.
+      additionalFields: { role: { type: "string", defaultValue: "user", input: false } },
+    },
     plugins: [username()],
     advanced: {
       // The worker sits behind the SvelteKit proxy; trust its forwarded client IP for rate limiting.

@@ -92,4 +92,30 @@ export interface Me {
   id: string;
   name: string;
   email: string;
+  admin: boolean;
+}
+
+// ---- Admin pages (routes/admin.ts) ----
+
+/** A character with open reports, and those reports, for review. */
+export interface ReportedCharacter {
+  character: { id: string; name: string; author_id: string; author_name: string; display_image: string; hidden: boolean };
+  reports: { reason: ReportReason; note: string; reporter_name: string; created_at: number }[];
+}
+
+export type ReviewAction = "dismiss" | "hide" | "delete";
+
+export interface AdminMod {
+  id: string;
+  name: string;
+  pending: boolean;
+  /** How many genes identify it (0: it can only be picked by hand). */
+  signature_genes: number;
+  characters: number;
+  created_by: string | null;
+}
+
+export interface AdminTag extends TagSummary {
+  /** Set once merged: the tag it now stands for. */
+  merged_into: string | null;
 }

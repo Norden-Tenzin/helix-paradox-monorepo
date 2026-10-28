@@ -56,6 +56,9 @@
 						<DropdownMenu.Item class={menuItem} onSelect={() => goto('/upload')}>
 							Share a character
 						</DropdownMenu.Item>
+						{#if user.admin}
+							<DropdownMenu.Item class={menuItem} onSelect={() => goto('/admin')}>Admin</DropdownMenu.Item>
+						{/if}
 						<DropdownMenu.Item class={menuItem} onSelect={signOut}>Sign out</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Portal>

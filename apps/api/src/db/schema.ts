@@ -12,6 +12,9 @@ export const user = sqliteTable("user", {
   image: text("image"),
   username: text("username").unique(),
   displayUsername: text("display_username"),
+  // "admin" can review reports and look after mods and tags (routes/admin.ts). Granted with
+  // scripts/set-role.mts, never through sign-up (auth.ts marks it input: false).
+  role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
@@ -143,6 +146,9 @@ export const tags = sqliteTable(
     id: text("id").notNull(),
     name: text("name").notNull(),
     useCount: integer("use_count").notNull().default(0),
+    // Set when an admin merges this tag into another: it stays only so that typing its name
+    // later gives the tag it was merged into.
+    mergedInto: text("merged_into"),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
   },

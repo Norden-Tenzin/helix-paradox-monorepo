@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { Db } from "./db";
 import { characters, characterTags, tags } from "./db/schema";
@@ -18,8 +18,18 @@ export async function resolveTags(db: Db, game: GameId, names: string[], userId:
     const slug = tagSlug(name);
     if (slug && !wanted.has(slug)) wanted.set(slug, name);
   }
-  if (wanted.size > MAX_TAGS) throw new HTTPException(400, { message: `At most ${MAX_TAGS} tags` });
   if (wanted.size === 0) return [];
+
+  // A tag merged into another (by an admin) stands for that one from now on.
+  const merged = await db
+    .select({ id: tags.id, into: tags.mergedInto })
+    .from(tags)
+    .where(and(eq(tags.game, game), inArray(tags.id, [...wanted.keys()]), isNotNull(tags.mergedInto)));
+  for (const { id, into } of merged) {
+    wanted.delete(id);
+    if (into && !wanted.has(into)) wanted.set(into, into);
+  }
+  if (wanted.size > MAX_TAGS) throw new HTTPException(400, { message: `At most ${MAX_TAGS} tags` });
 
   const now = Date.now();
   await db

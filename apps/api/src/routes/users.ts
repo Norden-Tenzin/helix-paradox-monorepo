@@ -10,7 +10,12 @@ export const userRoutes = new Hono<AppEnv>()
   .get("/me", async (c) => {
     const session = await c.var.auth.api.getSession({ headers: c.req.raw.headers });
     if (!session) return c.json(null);
-    const me: Me = { id: session.user.id, name: displayName(session.user), email: session.user.email };
+    const me: Me = {
+      id: session.user.id,
+      name: displayName(session.user),
+      email: session.user.email,
+      admin: session.user.role === "admin",
+    };
     return c.json(me);
   })
 

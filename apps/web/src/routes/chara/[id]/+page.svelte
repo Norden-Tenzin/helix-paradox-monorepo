@@ -77,6 +77,11 @@
 
 	<!-- Facts and the DNA -->
 	<div class="lg:col-span-5 lg:pt-4">
+		{#if character.hidden && !isOwner && data.user?.admin}
+			<p class="mb-8 border-l-2 border-danger bg-surface px-5 py-4 text-small" role="status">
+				Hidden after reports. Only its owner and admins can see it. <a href="/admin" class="link">Review the reports</a>
+			</p>
+		{/if}
 		{#if isOwner && (character.hidden || character.open_reports.length > 0)}
 			<!-- Only the owner sees this: what people reported, never who. -->
 			<div class="mb-8 border-l-2 border-danger bg-surface px-5 py-4" role="status">
