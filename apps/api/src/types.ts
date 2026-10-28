@@ -6,6 +6,10 @@ export type { GameId };
 export type Sex = "male" | "female";
 export type Sort = "newest" | "oldest";
 
+/** Why someone reports a character. */
+export const REPORT_REASONS = ["broken_dna", "wrong_mods", "duplicate", "inappropriate", "other"] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
 /** A mod as shown to people. Pending mods were named by an uploader and aren't in filters yet. */
 export interface Mod {
   id: string;
@@ -43,6 +47,12 @@ export interface Character {
   favourite_count: number;
   /** Whether the person asking has favourited it (always false when signed out). */
   favourited: boolean;
+  /** Hidden after several reports, until reviewed. Only its owner (and admins) still see it. */
+  hidden: boolean;
+  /** Whether the person asking has an open report on it. */
+  reported: boolean;
+  /** For its owner only: open reports by reason (never who sent them). Empty for everyone else. */
+  open_reports: { reason: ReportReason; count: number }[];
 }
 
 /** After favouriting or unfavouriting (PUT/DELETE /api/characters/:id/favourite). */

@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { Check, Copy } from '@lucide/svelte';
 	import FavouriteButton from '#lib/components/FavouriteButton.svelte';
+	import ReportButton from '#lib/components/ReportButton.svelte';
 	import Strand from '#lib/components/Strand.svelte';
 	import { parseDna } from '#lib/dna.ts';
+	import { REPORT_REASON_LABELS } from '#lib/reports.ts';
 	import { button } from '#lib/ui.ts';
 	import type { PageProps } from './$types';
 
@@ -75,6 +77,25 @@
 
 	<!-- Facts and the DNA -->
 	<div class="lg:col-span-5 lg:pt-4">
+		{#if isOwner && (character.hidden || character.open_reports.length > 0)}
+			<!-- Only the owner sees this: what people reported, never who. -->
+			<div class="mb-8 border-l-2 border-danger bg-surface px-5 py-4" role="status">
+				<p class="font-semibold">
+					{character.hidden ? 'Hidden while reports are reviewed' : 'People have reported a problem'}
+				</p>
+				<p class="mt-1 text-small text-muted">
+					{character.hidden
+						? 'Only you can see this character until someone reviews the reports.'
+						: 'If more people report it, it’s hidden until someone reviews the reports.'}
+					Fixing the problem (say, editing the DNA) helps the review.
+				</p>
+				<ul class="mt-3 space-y-1 text-small">
+					{#each character.open_reports as r (r.reason)}
+						<li>{REPORT_REASON_LABELS[r.reason]}: {r.count}</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
 		<h1 class="text-head">{character.name}</h1>
 		<dl class="mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-body">
 			<dt class="text-muted">Shared by</dt>
@@ -120,6 +141,11 @@
 				<a href="/upload/{character.id}" class="link text-body">Edit</a>
 			{/if}
 		</div>
+		{#if !isOwner}
+			<p class="mt-4">
+				<ReportButton id={character.id} name={character.name} reported={character.reported} signedIn={!!data.user} />
+			</p>
+		{/if}
 		<p class="mt-3 text-small text-muted" aria-live="polite">
 			{#if copyFailed}
 				Your browser blocked the clipboard. Select the DNA below and copy it by hand.

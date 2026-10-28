@@ -4,13 +4,14 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { requireUser, viewerId, type AppEnv } from "../context";
 import type { Db } from "../db";
-import { characterMods, characters, characterTags, favourites, mods, tags, user } from "../db/schema";
+import { characterMods, characters, characterTags, favourites, mods, reports, tags, user } from "../db/schema";
 import { dnaFingerprint, guessMods, MIN_GENES, parseDna } from "../dna";
 import { BASE_MOD, DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
 import { deleteImages, imageUrl, MAX_GRID_IMAGES, putImage, toStoredValue, validateImage } from "../images";
 import { gameMods, namedMod, signatures } from "../mods";
+import { hideIfReportedEnough, visibleTo } from "../reports";
 import { recountTags, resolveTags } from "../tags";
-import type { Character, CharacterPage, FavouriteState, Mod, Tag } from "../types";
+import { REPORT_REASONS, type Character, type CharacterPage, type FavouriteState, type Mod, type ReportReason, type Tag } from "../types";
 
 const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 48;
@@ -55,6 +56,13 @@ const characterFields = z.object({
 
 type CharacterFields = z.infer<typeof characterFields>;
 
+const reportBody = z
+  .object({
+    reason: z.enum(REPORT_REASONS),
+    note: z.string().trim().max(500).default(""),
+  })
+  .refine((r) => r.reason !== "other" || r.note.length > 0, "Say what's wrong");
+
 const authorName = sql<string>`coalesce(${user.displayUsername}, ${user.username}, ${user.name})`;
 
 const characterColumns = {
@@ -71,15 +79,23 @@ const characterColumns = {
   display_image: characters.displayImage,
   grid_images: characters.gridImages,
   favourite_count: characters.favouriteCount,
+  hidden_at: characters.hiddenAt,
 };
 
-type CharacterRow = Omit<Character, "mods" | "tags" | "game" | "favourited"> & { game: string };
+type CharacterRow = Omit<Character, "mods" | "tags" | "game" | "favourited" | "hidden" | "reported" | "open_reports"> & {
+  game: string;
+  hidden_at: number | null;
+};
 
-/** Adds mods, tags and, for a signed-in viewer, whether they favourited each one. */
+/**
+ * Adds mods and tags, and for a signed-in viewer whether they favourited or reported each one;
+ * owners also get their characters' open reports, counted by reason.
+ */
 async function enrich(db: Db, rows: CharacterRow[], viewer: string | null): Promise<Character[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [modRows, tagRows, mine] = await Promise.all([
+  const owned = rows.filter((r) => viewer && r.author_id === viewer).map((r) => r.id);
+  const [modRows, tagRows, mine, myReports, ownerReports] = await Promise.all([
     db
       .select({ cid: characterMods.cid, id: mods.id, name: mods.name, status: mods.status })
       .from(characterMods)
@@ -98,8 +114,22 @@ async function enrich(db: Db, rows: CharacterRow[], viewer: string | null): Prom
           .from(favourites)
           .where(and(eq(favourites.userId, viewer), inArray(favourites.characterId, ids)))
       : Promise.resolve([]),
+    viewer
+      ? db
+          .select({ id: reports.characterId })
+          .from(reports)
+          .where(and(eq(reports.reporterId, viewer), eq(reports.status, "open"), inArray(reports.characterId, ids)))
+      : Promise.resolve([]),
+    owned.length > 0
+      ? db
+          .select({ id: reports.characterId, reason: reports.reason, count: count() })
+          .from(reports)
+          .where(and(eq(reports.status, "open"), inArray(reports.characterId, owned)))
+          .groupBy(reports.characterId, reports.reason)
+      : Promise.resolve([]),
   ]);
   const favourited = new Set(mine.map((f) => f.id));
+  const reported = new Set(myReports.map((r) => r.id));
   return rows.map((r) => ({
     ...r,
     game: r.game as GameId,
@@ -110,6 +140,11 @@ async function enrich(db: Db, rows: CharacterRow[], viewer: string | null): Prom
       .map((m): Mod => ({ id: m.id, name: m.name, pending: m.status === "pending" })),
     tags: tagRows.filter((t) => t.cid === r.id).map((t): Tag => ({ id: t.id, name: t.name })),
     favourited: favourited.has(r.id),
+    hidden: r.hidden_at !== null,
+    reported: reported.has(r.id),
+    open_reports: ownerReports
+      .filter((o) => o.id === r.id)
+      .map((o) => ({ reason: o.reason as ReportReason, count: o.count })),
   }));
 }
 
@@ -256,7 +291,7 @@ export const characterRoutes = new Hono<AppEnv>()
     const viewer = await viewerId(c);
     if (favouritesOf && !viewer) throw new HTTPException(401, { message: "Sign in to see your favourites" });
 
-    const conditions: (SQL | undefined)[] = [];
+    const conditions: (SQL | undefined)[] = [visibleTo(viewer)];
     if (game) conditions.push(eq(characters.game, game));
     if (author) conditions.push(eq(characters.authorId, author));
     if (sex) conditions.push(eq(characters.sex, sex));
@@ -322,8 +357,12 @@ export const characterRoutes = new Hono<AppEnv>()
 
   .get("/:id", async (c) => {
     const row = await getCharacter(c.var.db, c.req.param("id"));
-    if (!row) throw new HTTPException(404, { message: "Character not found" });
-    const [character] = await enrich(c.var.db, [row], await viewerId(c));
+    const viewer = await viewerId(c);
+    // A hidden character is "not found" to anyone but its owner.
+    if (!row || (row.hidden_at !== null && row.author_id !== viewer)) {
+      throw new HTTPException(404, { message: "Character not found" });
+    }
+    const [character] = await enrich(c.var.db, [row], viewer);
     return c.json(character);
   })
 
@@ -332,13 +371,39 @@ export const characterRoutes = new Hono<AppEnv>()
   .put("/:id/favourite", requireUser, async (c) => {
     const id = c.req.param("id");
     const db = c.var.db;
-    const [exists] = await db.select({ id: characters.id }).from(characters).where(eq(characters.id, id));
+    const [exists] = await db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(and(eq(characters.id, id), visibleTo(c.var.user.id)));
     if (!exists) throw new HTTPException(404, { message: "Character not found" });
     await db.batch([
       db.insert(favourites).values({ userId: c.var.user.id, characterId: id, createdAt: Date.now() }).onConflictDoNothing(),
       recountFavourites(db, id),
     ]);
     return c.json(await favouriteState(db, id, c.var.user.id));
+  })
+
+  // One report per person per character; reporting again replaces the reason. Enough open
+  // reports hide the character until someone reviews them (reports.ts).
+  .post("/:id/report", requireUser, async (c) => {
+    const id = c.req.param("id");
+    const db = c.var.db;
+    const parsed = reportBody.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new HTTPException(400, { message: parsed.error.issues.map((i) => i.message).join(", ") });
+    const [target] = await db
+      .select({ authorId: characters.authorId })
+      .from(characters)
+      .where(and(eq(characters.id, id), visibleTo(c.var.user.id)));
+    if (!target) throw new HTTPException(404, { message: "Character not found" });
+    if (target.authorId === c.var.user.id) throw new HTTPException(400, { message: "You can't report your own character" });
+
+    const report = { reason: parsed.data.reason, note: parsed.data.note, status: "open" as const, createdAt: Date.now() };
+    await db
+      .insert(reports)
+      .values({ characterId: id, reporterId: c.var.user.id, ...report })
+      .onConflictDoUpdate({ target: [reports.characterId, reports.reporterId], set: { ...report, reviewedBy: null, reviewedAt: null } });
+    await hideIfReportedEnough(db, id);
+    return c.json({ reported: true });
   })
 
   .delete("/:id/favourite", requireUser, async (c) => {

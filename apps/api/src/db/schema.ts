@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { REPORT_REASONS } from "../types";
 
 // ==================== AUTH (Better Auth) ====================
 
@@ -88,6 +89,9 @@ export const characters = sqliteTable(
     // How many people favourited it. Always recounted from `favourites` when one is added or
     // removed (never nudged by ±1), so it can't drift.
     favouriteCount: integer("favourite_count").notNull().default(0),
+    // Set when enough people report it (see reports.ts); hidden from everyone but its owner
+    // until someone reviews the reports. Null when visible.
+    hiddenAt: integer("hidden_at"),
     // R2 object key, or an absolute URL for legacy images.
     displayImage: text("display_image").notNull(),
     gridImages: text("grid_images", { mode: "json" }).$type<string[]>().notNull().default([]),
@@ -173,6 +177,30 @@ export const favourites = sqliteTable(
     primaryKey({ columns: [t.userId, t.characterId] }),
     index("favourites_character_idx").on(t.characterId),
     index("favourites_user_created_idx").on(t.userId, t.createdAt),
+  ],
+);
+
+// Someone telling us a character is broken or doesn't belong. One per person per character:
+// reporting again replaces the earlier reason. Stays "open" until someone reviews it.
+export const reports = sqliteTable(
+  "reports",
+  {
+    characterId: text("character_id")
+      .notNull()
+      .references(() => characters.id, { onDelete: "cascade" }),
+    reporterId: text("reporter_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    reason: text("reason", { enum: REPORT_REASONS }).notNull(),
+    note: text("note").notNull().default(""),
+    status: text("status", { enum: ["open", "dismissed", "upheld"] }).notNull().default("open"),
+    createdAt: integer("created_at").notNull(),
+    reviewedBy: text("reviewed_by").references(() => user.id, { onDelete: "set null" }),
+    reviewedAt: integer("reviewed_at"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.characterId, t.reporterId] }),
+    index("reports_status_created_idx").on(t.status, t.createdAt),
   ],
 );
 

@@ -29,12 +29,15 @@ export async function resolveTags(db: Db, game: GameId, names: string[], userId:
   return [...wanted.keys()];
 }
 
-/** Recounts how many characters use each tag, so counts can't drift as tags come and go. */
+/**
+ * Recounts how many visible characters use each tag, so counts can't drift as tags come and go
+ * and a popular tag never leads to characters hidden by reports.
+ */
 export const recountTags = (db: Db, game: string, slugs: string[]) =>
   db
     .update(tags)
     .set({
       useCount: sql`(select count(*) from ${characterTags} inner join ${characters} on ${characters.id} = ${characterTags.cid}
-        where ${characterTags.tag} = ${tags.id} and ${characters.game} = ${tags.game})`,
+        where ${characterTags.tag} = ${tags.id} and ${characters.game} = ${tags.game} and ${characters.hiddenAt} is null)`,
     })
     .where(and(eq(tags.game, game), inArray(tags.id, slugs.length > 0 ? slugs : [""])));

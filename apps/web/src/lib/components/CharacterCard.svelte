@@ -44,7 +44,10 @@
 		<a href="/chara/{chara.id}" class="hover:text-accent">{chara.name}</a>
 	</h3>
 	<p class="mt-1 flex items-center gap-3 text-small text-muted">
-		<span class="truncate">{modsLabel} · by {chara.author_name}</span>
+		<span class="truncate">
+			{#if chara.hidden}<span class="text-danger">Hidden ·</span>{/if}
+			{modsLabel} · by {chara.author_name}
+		</span>
 		{#if chara.favourite_count > 0}
 			<span
 				class="ml-auto inline-flex shrink-0 items-center gap-1 tabular-nums"
