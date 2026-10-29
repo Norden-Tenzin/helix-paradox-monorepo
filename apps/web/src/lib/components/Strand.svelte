@@ -170,13 +170,14 @@
 			</svg>
 		{/if}
 		{#if interactive}
+			<!-- Always two lines tall, so a long gene name doesn't shift what's below as the pointer moves. -->
 			<figcaption
-				class="{variant === 'map' ? 'mt-5' : 'mt-3'} flex min-h-[1.5em] items-baseline justify-between gap-4 text-small text-muted"
+				class="{variant === 'map' ? 'mt-5' : 'mt-3'} flex h-[2lh] items-baseline justify-between gap-4 text-small text-muted"
 				aria-live="polite"
 			>
 				{#if active !== null}
-					<span class="text-ink">{geneLabel(genes[active].name)}</span>
-					<span class="tabular-nums">{genes[active].a} / {genes[active].b}</span>
+					<span class="line-clamp-2 min-w-0 text-ink">{geneLabel(genes[active].name)}</span>
+					<span class="shrink-0 tabular-nums">{genes[active].a} / {genes[active].b}</span>
 				{:else}
 					<span>{n} genes. Point at one to read it.</span>
 				{/if}

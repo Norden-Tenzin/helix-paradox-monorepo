@@ -121,10 +121,11 @@
 </script>
 
 <div class="wrap">
-	<!-- Filters: plain toggles, all visible. -->
-	<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+	<!-- Filters: plain toggles, all visible. Search on its own line until there's room for it and
+	     the toggles side by side. -->
+	<div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
 		<form
-			class="flex w-full max-w-md"
+			class="flex w-full xl:max-w-md"
 			role="search"
 			onsubmit={(e) => {
 				e.preventDefault();

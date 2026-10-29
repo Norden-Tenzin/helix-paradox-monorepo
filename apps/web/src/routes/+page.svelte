@@ -146,10 +146,7 @@
 
 <main id="main">
   <!-- NEWEST FACES: small frames, wide space, scrolling sideways. -->
-  <section
-    class="flex min-h-[80svh] flex-col justify-center py-24 sm:min-h-svh"
-    {@attach reveal}
-  >
+  <section class="py-[clamp(96px,11vw,176px)]" {@attach reveal}>
     {#if latest.length > 0}
       <div
         class="wrap relative z-10 mb-5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2"
