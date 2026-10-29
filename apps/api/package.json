@@ -10,7 +10,9 @@
     "db:migrate:local": "wrangler d1 migrations apply helix-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply helix-db --remote",
     "db:backfill:local": "node scripts/backfill-dna.mts --local",
-    "db:backfill:remote": "node scripts/backfill-dna.mts --remote"
+    "db:backfill:remote": "node scripts/backfill-dna.mts --remote",
+    "db:relabel-mods:local": "node scripts/relabel-mods.mts --local",
+    "db:relabel-mods:remote": "node scripts/relabel-mods.mts --remote"
   },
   "dependencies": {
     "better-auth": "^1.7.12",
