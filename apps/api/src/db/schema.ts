@@ -1,6 +1,5 @@
 import { relations } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { AGES } from "../attributes";
 import type { FaceFeatures } from "../dna";
 import { REPORT_REASONS } from "../types";
 
@@ -97,8 +96,6 @@ export const characters = sqliteTable(
     // for the height and build filters. Null where the DNA lacks the gene, or until backfilled.
     height: integer("height"),
     build: integer("build"),
-    // Chosen by the uploader, since the DNA doesn't say. Null when they didn't.
-    age: text("age", { enum: AGES }),
     // How many people favourited it. Always recounted from `favourites` when one is added or
     // removed (never nudged by ±1), so it can't drift.
     favouriteCount: integer("favourite_count").notNull().default(0),

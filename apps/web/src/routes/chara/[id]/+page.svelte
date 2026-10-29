@@ -2,7 +2,7 @@
 	import { invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Check, Copy } from '@lucide/svelte';
-	import { AGE_LABELS, BUILD_LABELS, HEIGHT_LABELS } from 'api/attributes';
+	import { BUILD_LABELS, HEIGHT_LABELS } from 'api/attributes';
 	import CharacterCard from '#lib/components/CharacterCard.svelte';
 	import CollectionButton from '#lib/components/CollectionButton.svelte';
 	import FavouriteButton from '#lib/components/FavouriteButton.svelte';
@@ -132,10 +132,6 @@
 			<dd>{modsLabel}</dd>
 			<dt class="text-muted">Sex</dt>
 			<dd>{character.sex === 'female' ? 'Female' : 'Male'}</dd>
-			{#if character.age}
-				<dt class="text-muted">Age</dt>
-				<dd>{AGE_LABELS[character.age]}</dd>
-			{/if}
 			{#if character.height}
 				<dt class="text-muted">Height</dt>
 				<dd>{HEIGHT_LABELS[character.height]}</dd>

@@ -24,7 +24,7 @@ are first-party and there is no CORS to configure.
 | Route                            | Description                                                   |
 | -------------------------------- | ------------------------------------------------------------- |
 | `/api/auth/*`                    | Better Auth (email + password, sign in with username or email) |
-| `GET /api/characters`            | List with `total`. Query: `author, sex, height, build, age, mods=epe,cfp, tags, q, favourites=mine, collection, sort, cursor, limit` |
+| `GET /api/characters`            | List with `total`. Query: `author, sex, height, build, mods=epe,cfp, tags, q, favourites=mine, collection, sort, cursor, limit` |
 | `GET /api/characters/random`     | `{ id }` of a random visible character                        |
 | `GET /api/characters/:id`        | One character                                                 |
 | `POST /api/characters`           | Create (multipart, see below)                                 |
@@ -39,7 +39,7 @@ are first-party and there is no CORS to configure.
 | `GET /api/users/:id`             | Public profile + character count                              |
 | `GET /api/images/*`              | Images served from R2                                         |
 
-Create/update take `multipart/form-data` with `name`, `sex`, optional `age`, `description`, `dna`, repeated `mods`,
+Create/update take `multipart/form-data` with `name`, `sex` (only used when the DNA doesn't say; newer exports carry `type=`), `description`, `dna`, `newMod` (required when the DNA has genes from a mod we don't list),
 a `display` image, and up to three `grid` entries. Each image entry is either a new file or the URL of
 one of the character's existing images, which keeps it. Images that an update drops are deleted from R2.
 

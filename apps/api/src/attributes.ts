@@ -1,7 +1,6 @@
-// Body attributes people can filter the library by. Height and build are read from the DNA at
-// upload and stored as the gene's 0–255 value, so the bands below can be retuned without a
-// backfill. Age isn't in the DNA (the Ruler Designer sets it separately), so the uploader picks it.
-// Imported by the web app as "api/attributes".
+// Body attributes read from the DNA at upload: height and build, stored as the gene's 0–255
+// value so the bands below can be retuned without a backfill. (Age isn't in the DNA: `gene_age`
+// is how aging shows, not how old someone is.) Imported by the web app as "api/attributes".
 
 import type { Gene } from "./dna";
 
@@ -10,9 +9,6 @@ export type Height = (typeof HEIGHTS)[number];
 
 export const BUILDS = ["slim", "average", "heavy"] as const;
 export type Build = (typeof BUILDS)[number];
-
-export const AGES = ["young", "adult", "old"] as const;
-export type Age = (typeof AGES)[number];
 
 /**
  * Gene values (0–255, about 127 for the average person) each band covers. The middle band is
@@ -34,7 +30,6 @@ export const BUILD_RANGES: Record<Build, readonly [number, number]> = {
 
 export const HEIGHT_LABELS: Record<Height, string> = { short: "Short", average: "Average", tall: "Tall" };
 export const BUILD_LABELS: Record<Build, string> = { slim: "Slim", average: "Average", heavy: "Heavy" };
-export const AGE_LABELS: Record<Age, string> = { young: "Young", adult: "Adult", old: "Old" };
 
 /**
  * Height (`gene_height`) and build (`gene_bs_body_type`, how much body fat) as the DNA sets them,

@@ -39,6 +39,17 @@ function genesBlock(dna: string) {
   return dna.slice(open.index + open[0].length);
 }
 
+/**
+ * The sex the export says, from its `type=` line (newer exports only: "female", "male", or "girl"
+ * and "boy" for children). Null for older exports, which are a bare genes block.
+ */
+export function dnaSex(dna: string): "male" | "female" | null {
+  const open = /\bgenes\s*=\s*\{/.exec(dna);
+  const header = open ? dna.slice(0, open.index) : dna;
+  const type = /(?:^|[\s{])type\s*=\s*"?(male|female|boy|girl)\b/i.exec(header)?.[1].toLowerCase();
+  return type === "female" || type === "girl" ? "female" : type === "male" || type === "boy" ? "male" : null;
+}
+
 export function parseDna(dna: string): Gene[] {
   const genes: Gene[] = [];
   for (const [, name, body] of genesBlock(dna).matchAll(GENE_PATTERN)) {

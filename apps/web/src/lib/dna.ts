@@ -2,6 +2,7 @@
 export {
 	MIN_GENES,
 	REGIONS,
+	dnaSex,
 	geneLabel,
 	geneRegion,
 	parseDna,

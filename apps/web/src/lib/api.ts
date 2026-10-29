@@ -1,7 +1,6 @@
 import { error } from '@sveltejs/kit';
 
 export type {
-	Age,
 	Build,
 	Character,
 	CharacterPage,

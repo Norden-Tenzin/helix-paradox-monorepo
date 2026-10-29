@@ -2,12 +2,12 @@ import { and, asc, between, count, desc, eq, inArray, isNotNull, isNull, ne, or,
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { AGES, BUILD_RANGES, BUILDS, bodyMeasures, buildBand, HEIGHT_RANGES, HEIGHTS, heightBand, type Age } from "../attributes";
+import { BUILD_RANGES, BUILDS, bodyMeasures, buildBand, HEIGHT_RANGES, HEIGHTS, heightBand } from "../attributes";
 import { requireUser, viewer as whoIsAsking, viewerId, type AppEnv } from "../context";
 import type { Db } from "../db";
 import { characterMods, characters, characterTags, collectionCharacters, collections, favourites, reports, user } from "../db/schema";
-import { dnaFingerprint, faceDistance, faceFeatures, guessMods, MIN_GENES, parseDna } from "../dna";
-import { BASE_MOD, DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
+import { dnaFingerprint, dnaSex, faceDistance, faceFeatures, guessMods, MIN_GENES, parseDna } from "../dna";
+import { DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
 import { deleteImages, imageUrl, MAX_GRID_IMAGES, putImage, toStoredValue, validateImage } from "../images";
 import { gameMods, namedMod, signatures } from "../mods";
 import { hideIfReportedEnough, visibleTo } from "../reports";
@@ -38,7 +38,6 @@ const listQuery = z.object({
   collection: z.string().optional(),
   height: z.enum(HEIGHTS).optional(),
   build: z.enum(BUILDS).optional(),
-  age: z.enum(AGES).optional(),
   sort: z.enum(["newest", "oldest", "popular"]).default("newest"),
   cursor: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
@@ -50,12 +49,10 @@ const normalizeNewlines = (s: string) => s.replace(/\r\n?/g, "\n");
 const characterFields = z.object({
   game: z.enum(GAME_IDS).default(DEFAULT_GAME),
   name: z.string().trim().min(1, "Name is required").max(100),
-  sex: z.enum(["male", "female"]),
+  /** Only needed when the DNA doesn't say (older exports); the DNA wins when it does. */
+  sex: z.enum(["male", "female"]).optional(),
   description: z.string().max(5000).default("").transform(normalizeNewlines),
-  age: z.enum(AGES).optional(),
   dna: z.string().transform(normalizeNewlines).pipe(z.string().trim().min(1, "DNA is required").max(50_000)),
-  // Checked against the game's `mods` rows in resolveMods.
-  mods: z.array(z.string().trim().toLowerCase().min(1).max(40)).transform((ids) => [...new Set(ids)]),
   /** A mod we don't list yet, named by the uploader because the DNA has genes we don't recognise. */
   newMod: z.string().trim().max(60).optional(),
   /** Tag names as typed; resolveTags cleans, dedupes and caps them. */
@@ -94,7 +91,6 @@ export const characterColumns = (viewer: string | null) => ({
   grid_images: characters.gridImages,
   height: characters.height,
   build: characters.build,
-  age: characters.age,
   favourite_count: characters.favouriteCount,
   hidden_at: characters.hiddenAt,
   mods_json: sql<string>`(select json_group_array(json_object('id', "mods"."id", 'name', "mods"."name", 'pending', "mods"."status" = 'pending'))
@@ -112,12 +108,11 @@ export const characterColumns = (viewer: string | null) => ({
 
 type CharacterRow = Omit<
   Character,
-  "mods" | "tags" | "game" | "height" | "build" | "age" | "favourited" | "hidden" | "reported" | "open_reports"
+  "mods" | "tags" | "game" | "height" | "build" | "favourited" | "hidden" | "reported" | "open_reports"
 > & {
   game: string;
   height: number | null;
   build: number | null;
-  age: Age | null;
   hidden_at: number | null;
   mods_json: string;
   tags_json: string;
@@ -170,32 +165,39 @@ async function favouriteState(db: Db, id: string, userId: string): Promise<Favou
 }
 
 /**
- * Checks the DNA is a whole face and the chosen mods exist for its game, adding the uploader's
- * named mod (as pending) if they gave one. Returns the mods to store and the DNA's fingerprint.
+ * Checks the DNA is a whole face and works out what's stored from it: the sex (the DNA's own,
+ * else the uploader's), the mods, the fingerprint, and the face's features and measurements.
+ *
+ * Mods come from the DNA alone: the ones whose own genes it carries, or the base game. Genes no
+ * known mod accounts for mean a mod we don't know, which the uploader must name (it's added as
+ * pending, with those genes as its signature). `kept` is an edited character's current DNA and
+ * mods: if the DNA hasn't changed, its mods stay as they are, since older exports made with a mod
+ * can lack that mod's genes and would otherwise turn into the base game.
  */
-async function resolveDnaAndMods(db: Db, fields: CharacterFields, userId: string) {
+async function resolveDna(db: Db, fields: CharacterFields, userId: string, kept?: { dna: string; mods: string[] }) {
   const genes = parseDna(fields.dna);
   if (genes.length < MIN_GENES) {
     throw new HTTPException(400, { message: "This DNA looks cut short. Copy the whole string from the game." });
   }
+  const sex = dnaSex(fields.dna) ?? fields.sex;
+  if (!sex) throw new HTTPException(400, { message: "This DNA doesn't say their sex. Choose female or male." });
 
-  const rows = await gameMods(db, fields.game);
-  const unknown = fields.mods.filter((id) => !rows.some((m) => m.id === id));
-  if (unknown.length > 0) throw new HTTPException(400, { message: `Unknown mod: ${unknown.join(", ")}` });
-
-  const chosen = [...fields.mods];
-  if (fields.newMod) {
-    const { base, others } = signatures(rows);
-    const { unknownGenes } = guessMods(genes, base, others);
-    const id = await namedMod(db, fields.game, fields.newMod, unknownGenes, userId);
-    if (!chosen.includes(id)) chosen.push(id);
-  }
-  if (chosen.length === 0) throw new HTTPException(400, { message: "Select at least one mod" });
-  if (chosen.includes(BASE_MOD) && chosen.length > 1) {
-    throw new HTTPException(400, { message: "Vanilla can't be combined with other mods" });
+  let chosen: string[];
+  if (kept && kept.dna === fields.dna && kept.mods.length > 0) chosen = kept.mods;
+  else {
+    const { base, others } = signatures(await gameMods(db, fields.game));
+    const guess = guessMods(genes, base, others);
+    chosen = guess.mods;
+    if (guess.unknownGenes.length > 0) {
+      if (!fields.newMod) {
+        throw new HTTPException(400, { message: "This DNA has genes from a mod we don't know yet. Say which mod you used." });
+      }
+      chosen = [...chosen, await namedMod(db, fields.game, fields.newMod, guess.unknownGenes, userId)];
+    }
   }
   return {
-    mods: chosen,
+    sex,
+    mods: [...new Set(chosen)],
     dnaHash: await dnaFingerprint(fields.dna),
     features: faceFeatures(fields.dna),
     ...bodyMeasures(genes),
@@ -223,11 +225,9 @@ async function readCharacterForm(req: Request) {
   const parsed = characterFields.safeParse({
     game: text("game"),
     name: text("name"),
-    sex: text("sex"),
+    sex: text("sex") || undefined,
     description: text("description") ?? "",
-    age: text("age") || undefined,
     dna: text("dna"),
-    mods: form.getAll("mods").filter((m) => typeof m === "string"),
     newMod: text("newMod") || undefined,
     tags: form.getAll("tags").filter((t) => typeof t === "string"),
   });
@@ -293,7 +293,7 @@ export const characterRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
     const parsed = listQuery.safeParse(c.req.query());
     if (!parsed.success) throw new HTTPException(400, { message: "Invalid query" });
-    const { game, author, sex, height, build, age, mods, tags: tagged, q, favourites: favouritesOf, collection, sort, cursor, limit } =
+    const { game, author, sex, height, build, mods, tags: tagged, q, favourites: favouritesOf, collection, sort, cursor, limit } =
       parsed.data;
     const db = c.var.db;
     const viewer = await viewerId(c);
@@ -313,7 +313,6 @@ export const characterRoutes = new Hono<AppEnv>()
     if (sex) conditions.push(eq(characters.sex, sex));
     if (height) conditions.push(between(characters.height, ...HEIGHT_RANGES[height]));
     if (build) conditions.push(between(characters.build, ...BUILD_RANGES[build]));
-    if (age) conditions.push(eq(characters.age, age));
     if (q) {
       // A character's name, its author, or the name of one of its tags or mods. (Subqueries
       // spell out table names: drizzle leaves columns unqualified inside them.)
@@ -556,7 +555,7 @@ export const characterRoutes = new Hono<AppEnv>()
     if (typeof display === "string") throw new HTTPException(400, { message: "Primary image must be a file" });
 
     const id = crypto.randomUUID();
-    const resolved = await resolveDnaAndMods(c.var.db, fields, c.var.user.id);
+    const resolved = await resolveDna(c.var.db, fields, c.var.user.id);
     const tagIds = await resolveTags(c.var.db, fields.game, fields.tags, c.var.user.id);
     const images = await resolveImages(c.env.BUCKET, id, display, grid, new Set());
     const now = Date.now();
@@ -566,14 +565,13 @@ export const characterRoutes = new Hono<AppEnv>()
           id,
           game: fields.game,
           name: fields.name,
-          sex: fields.sex,
+          sex: resolved.sex,
           description: fields.description,
           dna: fields.dna,
           dnaHash: resolved.dnaHash,
           features: resolved.features,
           height: resolved.height,
           build: resolved.build,
-          age: fields.age ?? null,
           authorId: c.var.user.id,
           postedAt: now,
           updatedAt: now,
@@ -595,7 +593,11 @@ export const characterRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const existing = await getOwnedCharacter(c.var.db, id, c.var.user.id);
     const { fields, display, grid } = await readCharacterForm(c.req.raw);
-    const resolved = await resolveDnaAndMods(c.var.db, fields, c.var.user.id);
+    const currentMods = await c.var.db.select({ mod: characterMods.mod }).from(characterMods).where(eq(characterMods.cid, id));
+    const resolved = await resolveDna(c.var.db, fields, c.var.user.id, {
+      dna: existing.dna,
+      mods: currentMods.map((m) => m.mod),
+    });
     const tagIds = await resolveTags(c.var.db, fields.game, fields.tags, c.var.user.id);
     const oldTags = await c.var.db.select({ tag: characterTags.tag }).from(characterTags).where(eq(characterTags.cid, id));
 
@@ -608,14 +610,13 @@ export const characterRoutes = new Hono<AppEnv>()
           .set({
             game: fields.game,
             name: fields.name,
-            sex: fields.sex,
+            sex: resolved.sex,
             description: fields.description,
             dna: fields.dna,
             dnaHash: resolved.dnaHash,
             features: resolved.features,
             height: resolved.height,
             build: resolved.build,
-            age: fields.age ?? null,
             displayImage: images.displayImage,
             gridImages: images.gridImages,
             updatedAt: Date.now(),

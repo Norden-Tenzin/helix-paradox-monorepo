@@ -1,9 +1,9 @@
 // Shapes returned by the API. Imported (type-only) by the web app.
 
-import type { Age, Build, Height } from "./attributes";
+import type { Build, Height } from "./attributes";
 import type { GameId } from "./games";
 
-export type { Age, Build, GameId, Height };
+export type { Build, GameId, Height };
 export type Sex = "male" | "female";
 export type Sort = "newest" | "oldest" | "popular";
 
@@ -48,8 +48,6 @@ export interface Character {
   /** Bands of the DNA's gene_height and gene_bs_body_type; null when the DNA lacks the gene. */
   height: Height | null;
   build: Build | null;
-  /** Set by the uploader; null when they didn't say. */
-  age: Age | null;
   favourite_count: number;
   /** Whether the person asking has favourited it (always false when signed out). */
   favourited: boolean;

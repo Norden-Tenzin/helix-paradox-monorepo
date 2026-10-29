@@ -64,6 +64,20 @@
       "when": 1793286697235,
       "tag": "0008_collections_and_attributes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793290032071,
+      "tag": "0009_drop_age",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793290925531,
+      "tag": "0010_remove_cfp",
+      "breakpoints": true
     }
   ]
 }
