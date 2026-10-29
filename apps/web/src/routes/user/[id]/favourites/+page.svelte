@@ -19,7 +19,7 @@
 	</p>
 </header>
 
-<ProfileTabs userId={data.user!.id} />
+<ProfileTabs userId={data.user!.id} isMe />
 
 <CharacterGrid
 	initial={data.characters}

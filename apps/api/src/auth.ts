@@ -24,6 +24,12 @@ export function createAuth(env: Env, db: Db) {
         await sendEmail(env, verificationEmail(user.email, user.name, url));
       },
     },
+    session: {
+      // Keeps a signed copy of the session in a cookie for 5 minutes, so most requests (and every
+      // page the site renders) don't need a database round trip just to know who's asking. The
+      // cost: signing out elsewhere, or a role change, can take up to 5 minutes to apply.
+      cookieCache: { enabled: true, maxAge: 5 * 60 },
+    },
     user: {
       // Read by requireAdmin; sign-up can't set it.
       additionalFields: { role: { type: "string", defaultValue: "user", input: false } },

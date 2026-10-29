@@ -2,7 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { ImagePlus, X } from '@lucide/svelte';
-	import { apiErrorMessage, type DnaReport, type Mod, type Sex } from '#lib/api.ts';
+	import { AGE_LABELS, AGES } from 'api/attributes';
+	import { apiErrorMessage, type Age, type DnaReport, type Mod, type Sex } from '#lib/api.ts';
 	import Strand from '#lib/components/Strand.svelte';
 	import TagInput from '#lib/components/TagInput.svelte';
 	import { MIN_GENES, parseDna } from '#lib/dna.ts';
@@ -24,6 +25,8 @@
 	let description = $derived(existing?.description ?? '');
 	let dna = $derived(existing?.dna ?? '');
 	let sex = $derived<Sex>(existing?.sex ?? 'male');
+	// The DNA doesn't carry age (the Ruler Designer sets it apart), so the uploader can say.
+	let age = $derived<Age | null>(existing?.age ?? null);
 	let mods = $derived<string[]>(existing?.mods.map((m) => m.id) ?? []);
 	let tags = $derived<string[]>(existing?.tags.map((t) => t.name) ?? []);
 	// A mod the uploader names because the DNA has genes we don't recognise.
@@ -161,6 +164,7 @@
 			const form = new FormData();
 			form.set('name', name.trim());
 			form.set('sex', sex);
+			if (age) form.set('age', age);
 			form.set('description', description);
 			form.set('dna', dna);
 			for (const mod of mods) form.append('mods', mod);
@@ -294,6 +298,17 @@
 						{#each [['female', 'Female'], ['male', 'Male']] as const as [value, text] (value)}
 							<button type="button" class={toggle} aria-pressed={sex === value} onclick={() => (sex = value)}>
 								{text}
+							</button>
+						{/each}
+					</div>
+				</div>
+				<div>
+					<span class={fieldLabel}>Age (optional)</span>
+					<div class="flex gap-px" role="group" aria-label="Age">
+						<button type="button" class={toggle} aria-pressed={age === null} onclick={() => (age = null)}>Not set</button>
+						{#each AGES as value (value)}
+							<button type="button" class={toggle} aria-pressed={age === value} onclick={() => (age = value)}>
+								{AGE_LABELS[value]}
 							</button>
 						{/each}
 					</div>

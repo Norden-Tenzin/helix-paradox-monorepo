@@ -1,8 +1,9 @@
 // Shapes returned by the API. Imported (type-only) by the web app.
 
+import type { Age, Build, Height } from "./attributes";
 import type { GameId } from "./games";
 
-export type { GameId };
+export type { Age, Build, GameId, Height };
 export type Sex = "male" | "female";
 export type Sort = "newest" | "oldest" | "popular";
 
@@ -44,6 +45,11 @@ export interface Character {
   grid_images: string[];
   mods: Mod[];
   tags: Tag[];
+  /** Bands of the DNA's gene_height and gene_bs_body_type; null when the DNA lacks the gene. */
+  height: Height | null;
+  build: Build | null;
+  /** Set by the uploader; null when they didn't say. */
+  age: Age | null;
   favourite_count: number;
   /** Whether the person asking has favourited it (always false when signed out). */
   favourited: boolean;
@@ -82,10 +88,44 @@ export interface DnaReport {
   duplicates: { id: string; name: string }[];
 }
 
+/** Why Discover showed a character: chance, or closeness to one of your favourites. */
+export type DiscoverReason = { kind: "random" } | { kind: "like"; id: string; name: string };
+
+/** A batch of the Discover feed (POST /api/discover). */
+export interface DiscoverPage {
+  picks: { character: Character; reason: DiscoverReason }[];
+  /** False once every visible character has been shown. */
+  more: boolean;
+}
+
+/** A named list of someone's favourites (routes/collections.ts). */
+export interface Collection {
+  id: string;
+  name: string;
+  description: string;
+  public: boolean;
+  owner_id: string;
+  owner_name: string;
+  /** Characters in it that the person asking can see. */
+  count: number;
+  /** Portraits of the most recently added, up to four. */
+  covers: string[];
+  updated_at: number;
+}
+
+/** One of your collections, and whether a given character is in it (for "Add to collection"). */
+export interface CollectionChoice {
+  id: string;
+  name: string;
+  has: boolean;
+}
+
 export interface PublicUser {
   id: string;
   name: string;
   character_count: number;
+  /** Public collections, or all of them on your own profile. */
+  collection_count: number;
 }
 
 export interface Me {

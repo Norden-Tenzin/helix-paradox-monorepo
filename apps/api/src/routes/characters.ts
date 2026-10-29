@@ -1,10 +1,11 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, between, count, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { AGES, BUILD_RANGES, BUILDS, bodyMeasures, buildBand, HEIGHT_RANGES, HEIGHTS, heightBand, type Age } from "../attributes";
 import { requireUser, viewer as whoIsAsking, viewerId, type AppEnv } from "../context";
 import type { Db } from "../db";
-import { characterMods, characters, characterTags, favourites, mods, reports, tags, user } from "../db/schema";
+import { characterMods, characters, characterTags, collectionCharacters, collections, favourites, reports, user } from "../db/schema";
 import { dnaFingerprint, faceDistance, faceFeatures, guessMods, MIN_GENES, parseDna } from "../dna";
 import { BASE_MOD, DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
 import { deleteImages, imageUrl, MAX_GRID_IMAGES, putImage, toStoredValue, validateImage } from "../images";
@@ -33,6 +34,11 @@ const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
   /** "mine": the signed-in person's favourites, most recently favourited first. */
   favourites: z.literal("mine").optional(),
+  /** A collection's characters, most recently added first. */
+  collection: z.string().optional(),
+  height: z.enum(HEIGHTS).optional(),
+  build: z.enum(BUILDS).optional(),
+  age: z.enum(AGES).optional(),
   sort: z.enum(["newest", "oldest", "popular"]).default("newest"),
   cursor: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
@@ -46,6 +52,7 @@ const characterFields = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   sex: z.enum(["male", "female"]),
   description: z.string().max(5000).default("").transform(normalizeNewlines),
+  age: z.enum(AGES).optional(),
   dna: z.string().transform(normalizeNewlines).pipe(z.string().trim().min(1, "DNA is required").max(50_000)),
   // Checked against the game's `mods` rows in resolveMods.
   mods: z.array(z.string().trim().toLowerCase().min(1).max(40)).transform((ids) => [...new Set(ids)]),
@@ -66,7 +73,13 @@ const reportBody = z
 
 const authorName = sql<string>`coalesce(${user.displayUsername}, ${user.username}, ${user.name})`;
 
-const characterColumns = {
+/**
+ * Everything a Character needs, in one query: its mods and tags as JSON, and for a signed-in
+ * viewer whether they favourited or reported it, plus (on their own characters) the reasons of
+ * its open reports. One round trip matters: D1 can be far from the worker. (Names written out
+ * in full: drizzle leaves columns unqualified inside correlated subqueries.)
+ */
+export const characterColumns = (viewer: string | null) => ({
   id: characters.id,
   game: characters.game,
   name: characters.name,
@@ -79,74 +92,61 @@ const characterColumns = {
   updated_at: characters.updatedAt,
   display_image: characters.displayImage,
   grid_images: characters.gridImages,
+  height: characters.height,
+  build: characters.build,
+  age: characters.age,
   favourite_count: characters.favouriteCount,
   hidden_at: characters.hiddenAt,
-};
+  mods_json: sql<string>`(select json_group_array(json_object('id', "mods"."id", 'name', "mods"."name", 'pending', "mods"."status" = 'pending'))
+    from "character_mods" join "mods" on "mods"."game" = "characters"."game" and "mods"."id" = "character_mods"."mod"
+    where "character_mods"."cid" = "characters"."id")`,
+  tags_json: sql<string>`(select json_group_array(json_object('id', "tags"."id", 'name', "tags"."name"))
+    from "character_tags" join "tags" on "tags"."game" = "characters"."game" and "tags"."id" = "character_tags"."tag"
+    where "character_tags"."cid" = "characters"."id")`,
+  favourited: sql<number>`exists (select 1 from "favourites" where "favourites"."character_id" = "characters"."id" and "favourites"."user_id" = ${viewer ?? ""})`,
+  reported: sql<number>`exists (select 1 from "reports" where "reports"."character_id" = "characters"."id" and "reports"."reporter_id" = ${viewer ?? ""} and "reports"."status" = 'open')`,
+  // One entry per open report; counted by reason in toCharacters.
+  open_report_reasons: sql<string>`(select json_group_array("reports"."reason") from "reports"
+    where "reports"."character_id" = "characters"."id" and "reports"."status" = 'open' and "characters"."author_id" = ${viewer ?? ""})`,
+});
 
-type CharacterRow = Omit<Character, "mods" | "tags" | "game" | "favourited" | "hidden" | "reported" | "open_reports"> & {
+type CharacterRow = Omit<
+  Character,
+  "mods" | "tags" | "game" | "height" | "build" | "age" | "favourited" | "hidden" | "reported" | "open_reports"
+> & {
   game: string;
+  height: number | null;
+  build: number | null;
+  age: Age | null;
   hidden_at: number | null;
+  mods_json: string;
+  tags_json: string;
+  favourited: number;
+  reported: number;
+  open_report_reasons: string;
 };
 
-/**
- * Adds mods and tags, and for a signed-in viewer whether they favourited or reported each one;
- * owners also get their characters' open reports, counted by reason.
- */
-async function enrich(db: Db, rows: CharacterRow[], viewer: string | null): Promise<Character[]> {
-  if (rows.length === 0) return [];
-  const ids = rows.map((r) => r.id);
-  const owned = rows.filter((r) => viewer && r.author_id === viewer).map((r) => r.id);
-  const [modRows, tagRows, mine, myReports, ownerReports] = await Promise.all([
-    db
-      .select({ cid: characterMods.cid, id: mods.id, name: mods.name, status: mods.status })
-      .from(characterMods)
-      .innerJoin(characters, eq(characters.id, characterMods.cid))
-      .innerJoin(mods, and(eq(mods.game, characters.game), eq(mods.id, characterMods.mod)))
-      .where(inArray(characterMods.cid, ids)),
-    db
-      .select({ cid: characterTags.cid, id: tags.id, name: tags.name })
-      .from(characterTags)
-      .innerJoin(characters, eq(characters.id, characterTags.cid))
-      .innerJoin(tags, and(eq(tags.game, characters.game), eq(tags.id, characterTags.tag)))
-      .where(inArray(characterTags.cid, ids)),
-    viewer
-      ? db
-          .select({ id: favourites.characterId })
-          .from(favourites)
-          .where(and(eq(favourites.userId, viewer), inArray(favourites.characterId, ids)))
-      : Promise.resolve([]),
-    viewer
-      ? db
-          .select({ id: reports.characterId })
-          .from(reports)
-          .where(and(eq(reports.reporterId, viewer), eq(reports.status, "open"), inArray(reports.characterId, ids)))
-      : Promise.resolve([]),
-    owned.length > 0
-      ? db
-          .select({ id: reports.characterId, reason: reports.reason, count: count() })
-          .from(reports)
-          .where(and(eq(reports.status, "open"), inArray(reports.characterId, owned)))
-          .groupBy(reports.characterId, reports.reason)
-      : Promise.resolve([]),
-  ]);
-  const favourited = new Set(mine.map((f) => f.id));
-  const reported = new Set(myReports.map((r) => r.id));
-  return rows.map((r) => ({
-    ...r,
-    game: r.game as GameId,
-    display_image: imageUrl(r.display_image),
-    grid_images: r.grid_images.map(imageUrl),
-    mods: modRows
-      .filter((m) => m.cid === r.id)
-      .map((m): Mod => ({ id: m.id, name: m.name, pending: m.status === "pending" })),
-    tags: tagRows.filter((t) => t.cid === r.id).map((t): Tag => ({ id: t.id, name: t.name })),
-    favourited: favourited.has(r.id),
-    hidden: r.hidden_at !== null,
-    reported: reported.has(r.id),
-    open_reports: ownerReports
-      .filter((o) => o.id === r.id)
-      .map((o) => ({ reason: o.reason as ReportReason, count: o.count })),
-  }));
+/** Shapes rows selected with characterColumns into what the API returns. */
+export function toCharacters(rows: CharacterRow[]): Character[] {
+  return rows.map(({ mods_json, tags_json, open_report_reasons, ...r }) => {
+    const reasons: ReportReason[] = JSON.parse(open_report_reasons);
+    return {
+      ...r,
+      game: r.game as GameId,
+      height: heightBand(r.height),
+      build: buildBand(r.build),
+      display_image: imageUrl(r.display_image),
+      grid_images: r.grid_images.map(imageUrl),
+      mods: (JSON.parse(mods_json) as { id: string; name: string; pending: number }[]).map(
+        (m): Mod => ({ id: m.id, name: m.name, pending: !!m.pending }),
+      ),
+      tags: JSON.parse(tags_json) as Tag[],
+      favourited: !!r.favourited,
+      hidden: r.hidden_at !== null,
+      reported: !!r.reported,
+      open_reports: [...new Set(reasons)].map((reason) => ({ reason, count: reasons.filter((x) => x === reason).length })),
+    };
+  });
 }
 
 /** Recounts a character's favourites from the rows themselves, so the stored count can't drift. */
@@ -194,12 +194,17 @@ async function resolveDnaAndMods(db: Db, fields: CharacterFields, userId: string
   if (chosen.includes(BASE_MOD) && chosen.length > 1) {
     throw new HTTPException(400, { message: "Vanilla can't be combined with other mods" });
   }
-  return { mods: chosen, dnaHash: await dnaFingerprint(fields.dna), features: faceFeatures(fields.dna) };
+  return {
+    mods: chosen,
+    dnaHash: await dnaFingerprint(fields.dna),
+    features: faceFeatures(fields.dna),
+    ...bodyMeasures(genes),
+  };
 }
 
-async function getCharacter(db: Db, id: string) {
+async function getCharacter(db: Db, id: string, viewer: string | null) {
   const [row] = await db
-    .select(characterColumns)
+    .select(characterColumns(viewer))
     .from(characters)
     .innerJoin(user, eq(user.id, characters.authorId))
     .where(eq(characters.id, id));
@@ -220,6 +225,7 @@ async function readCharacterForm(req: Request) {
     name: text("name"),
     sex: text("sex"),
     description: text("description") ?? "",
+    age: text("age") || undefined,
     dna: text("dna"),
     mods: form.getAll("mods").filter((m) => typeof m === "string"),
     newMod: text("newMod") || undefined,
@@ -287,15 +293,27 @@ export const characterRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
     const parsed = listQuery.safeParse(c.req.query());
     if (!parsed.success) throw new HTTPException(400, { message: "Invalid query" });
-    const { game, author, sex, mods, tags: tagged, q, favourites: favouritesOf, sort, cursor, limit } = parsed.data;
+    const { game, author, sex, height, build, age, mods, tags: tagged, q, favourites: favouritesOf, collection, sort, cursor, limit } =
+      parsed.data;
     const db = c.var.db;
     const viewer = await viewerId(c);
     if (favouritesOf && !viewer) throw new HTTPException(401, { message: "Sign in to see your favourites" });
+    // Checked alongside the listing below, rather than first, to save a round trip.
+    const collectionVisible = collection
+      ? db
+          .select({ id: collections.id })
+          .from(collections)
+          .where(and(eq(collections.id, collection), or(eq(collections.public, true), eq(collections.userId, viewer ?? ""))))
+          .then((found) => found.length > 0)
+      : Promise.resolve(true);
 
     const conditions: (SQL | undefined)[] = [visibleTo(viewer)];
     if (game) conditions.push(eq(characters.game, game));
     if (author) conditions.push(eq(characters.authorId, author));
     if (sex) conditions.push(eq(characters.sex, sex));
+    if (height) conditions.push(between(characters.height, ...HEIGHT_RANGES[height]));
+    if (build) conditions.push(between(characters.build, ...BUILD_RANGES[build]));
+    if (age) conditions.push(eq(characters.age, age));
     if (q) {
       // A character's name, its author, or the name of one of its tags or mods. (Subqueries
       // spell out table names: drizzle leaves columns unqualified inside them.)
@@ -354,42 +372,62 @@ export const characterRoutes = new Hono<AppEnv>()
           ]
         : [];
     const where = and(...conditions);
-    // Favourites list only the viewer's, ordered by when they favourited each one.
+    // Favourites list only the viewer's, ordered by when they favourited each one; a collection,
+    // by when each was added to it.
     const mine = and(eq(favourites.characterId, characters.id), eq(favourites.userId, viewer ?? ""));
-    const rowsQuery = db.select(characterColumns).from(characters).innerJoin(user, eq(user.id, characters.authorId)).$dynamic();
+    const inCollection = and(eq(collectionCharacters.characterId, characters.id), eq(collectionCharacters.collectionId, collection ?? ""));
+    const rowsQuery = db.select(characterColumns(viewer)).from(characters).innerJoin(user, eq(user.id, characters.authorId)).$dynamic();
     const totalQuery = db.select({ total: count() }).from(characters).innerJoin(user, eq(user.id, characters.authorId)).$dynamic();
-    const [rows, [{ total }]] = await Promise.all([
-      (favouritesOf ? rowsQuery.innerJoin(favourites, mine) : rowsQuery)
+    // (Joins on a dynamic query change it in place.)
+    if (favouritesOf) [rowsQuery, totalQuery].forEach((query) => query.innerJoin(favourites, mine));
+    else if (collection) [rowsQuery, totalQuery].forEach((query) => query.innerJoin(collectionCharacters, inCollection));
+    const [rows, [{ total }], visible] = await Promise.all([
+      rowsQuery
         .where(where)
         .orderBy(
           ...(favouritesOf ? [desc(favourites.createdAt)] : []),
+          ...(collection ? [desc(collectionCharacters.addedAt)] : []),
           ...popularFirst,
           order(characters.postedAt),
           order(characters.id),
         )
         .limit(limit + 1)
         .offset(cursor),
-      (favouritesOf ? totalQuery.innerJoin(favourites, mine) : totalQuery).where(where),
+      totalQuery.where(where),
+      collectionVisible,
     ]);
+    if (!visible) throw new HTTPException(404, { message: "Collection not found" });
 
     const hasMore = rows.length > limit;
     const body: CharacterPage = {
-      page: await enrich(db, rows.slice(0, limit), viewer),
+      page: toCharacters(rows.slice(0, limit)),
       nextCursor: hasMore ? String(cursor + limit) : null,
       total,
     };
     return c.json(body);
   })
 
+  // A visible character picked at random, for the Random button.
+  .get("/random", async (c) => {
+    const game = z.enum(GAME_IDS).default(DEFAULT_GAME).catch(DEFAULT_GAME).parse(c.req.query("game"));
+    const [pick] = await c.var.db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(and(eq(characters.game, game), isNull(characters.hiddenAt)))
+      .orderBy(sql`random()`)
+      .limit(1);
+    if (!pick) throw new HTTPException(404, { message: "The library is empty" });
+    return c.json(pick);
+  })
+
   .get("/:id", async (c) => {
-    const row = await getCharacter(c.var.db, c.req.param("id"));
     const asking = await whoIsAsking(c);
+    const row = await getCharacter(c.var.db, c.req.param("id"), asking?.id ?? null);
     // A hidden character is "not found" to anyone but its owner and admins reviewing it.
     if (!row || (row.hidden_at !== null && row.author_id !== asking?.id && !asking?.admin)) {
       throw new HTTPException(404, { message: "Character not found" });
     }
-    const [character] = await enrich(c.var.db, [row], asking?.id ?? null);
-    return c.json(character);
+    return c.json(toCharacters([row])[0]);
   })
 
   // Favouriting is idempotent: doing it twice, or unfavouriting something you never favourited,
@@ -417,17 +455,26 @@ export const characterRoutes = new Hono<AppEnv>()
     const db = c.var.db;
     const asking = await whoIsAsking(c);
     const limit = Math.min(12, Math.max(1, Number(c.req.query("limit")) || 5));
-    const [target] = await db
-      .select({ game: characters.game, features: characters.features })
-      .from(characters)
-      .where(and(eq(characters.id, id), visibleTo(asking?.id ?? null)));
+    // The target and the candidates in one go: candidates are the same game as the target.
+    const [[target], candidates] = await Promise.all([
+      db
+        .select({ features: characters.features })
+        .from(characters)
+        .where(and(eq(characters.id, id), visibleTo(asking?.id ?? null))),
+      db
+        .select({ id: characters.id, features: characters.features })
+        .from(characters)
+        .where(
+          and(
+            sql`"characters"."game" = (select "game" from "characters" where "id" = ${id})`,
+            isNull(characters.hiddenAt),
+            ne(characters.id, id),
+            isNotNull(characters.features),
+          ),
+        ),
+    ]);
     if (!target) throw new HTTPException(404, { message: "Character not found" });
     if (!target.features) return c.json([] satisfies Character[]);
-
-    const candidates = await db
-      .select({ id: characters.id, features: characters.features })
-      .from(characters)
-      .where(and(eq(characters.game, target.game), isNull(characters.hiddenAt), ne(characters.id, id), isNotNull(characters.features)));
     const nearest = candidates
       .map((cand) => ({ id: cand.id, distance: faceDistance(target.features!, cand.features!) }))
       .filter((cand) => Number.isFinite(cand.distance))
@@ -436,13 +483,13 @@ export const characterRoutes = new Hono<AppEnv>()
     if (nearest.length === 0) return c.json([] satisfies Character[]);
 
     const rows = await db
-      .select(characterColumns)
+      .select(characterColumns(asking?.id ?? null))
       .from(characters)
       .innerJoin(user, eq(user.id, characters.authorId))
       .where(inArray(characters.id, nearest.map((n) => n.id)));
     const order = new Map(nearest.map((n, i) => [n.id, i]));
     rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
-    return c.json(await enrich(db, rows, asking?.id ?? null));
+    return c.json(toCharacters(rows));
   })
 
   // The character page calls this once it has loaded in a browser, so server-side page loads,
@@ -482,11 +529,23 @@ export const characterRoutes = new Hono<AppEnv>()
     return c.json({ reported: true });
   })
 
+  // Unfavouriting also takes it out of your collections: they only ever hold your favourites.
   .delete("/:id/favourite", requireUser, async (c) => {
     const id = c.req.param("id");
     const db = c.var.db;
     await db.batch([
       db.delete(favourites).where(and(eq(favourites.userId, c.var.user.id), eq(favourites.characterId, id))),
+      db
+        .delete(collectionCharacters)
+        .where(
+          and(
+            eq(collectionCharacters.characterId, id),
+            inArray(
+              collectionCharacters.collectionId,
+              db.select({ id: collections.id }).from(collections).where(eq(collections.userId, c.var.user.id)),
+            ),
+          ),
+        ),
       recountFavourites(db, id),
     ]);
     return c.json(await favouriteState(db, id, c.var.user.id));
@@ -512,6 +571,9 @@ export const characterRoutes = new Hono<AppEnv>()
           dna: fields.dna,
           dnaHash: resolved.dnaHash,
           features: resolved.features,
+          height: resolved.height,
+          build: resolved.build,
+          age: fields.age ?? null,
           authorId: c.var.user.id,
           postedAt: now,
           updatedAt: now,
@@ -551,6 +613,9 @@ export const characterRoutes = new Hono<AppEnv>()
             dna: fields.dna,
             dnaHash: resolved.dnaHash,
             features: resolved.features,
+            height: resolved.height,
+            build: resolved.build,
+            age: fields.age ?? null,
             displayImage: images.displayImage,
             gridImages: images.gridImages,
             updatedAt: Date.now(),

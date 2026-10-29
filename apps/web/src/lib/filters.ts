@@ -35,14 +35,15 @@ export function filtersToParams(filters: Filters) {
 	return params;
 }
 
-/** Which characters a list shows: everyone's, one author's, or the signed-in person's favourites. */
-export type ListScope = { author: string } | { favourites: true } | undefined;
+/** Which characters a list shows: everyone's, one author's, the signed-in person's favourites, or a collection's. */
+export type ListScope = { author: string } | { favourites: true } | { collection: string } | undefined;
 
 /** API path for listing characters in a scope. */
 export function characterListPath(filters: Filters, scope?: ListScope, cursor?: string) {
 	const params = filtersToParams(filters);
 	if (scope && 'author' in scope) params.set('author', scope.author);
 	if (scope && 'favourites' in scope) params.set('favourites', 'mine');
+	if (scope && 'collection' in scope) params.set('collection', scope.collection);
 	if (cursor) params.set('cursor', cursor);
 	return `/api/characters?${params}`;
 }

@@ -6,6 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "observability": { "enabled": true },
+  // Run the worker near its D1 database rather than near each visitor: every page makes a few
+  // queries, and each one would otherwise cross the world. Only applies once deployed.
+  "placement": { "mode": "smart" },
   "vars": {
     "BETTER_AUTH_URL": "https://helix-paradox-website.nordentenzin29.workers.dev/",
     // Verification emails come from here (see src/email.ts). The domain must be onboarded in

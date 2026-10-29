@@ -4,8 +4,9 @@
 	import { apiErrorMessage, type FavouriteState } from '#lib/api.ts';
 	import { button } from '#lib/ui.ts';
 
-	// Favouriting shows at once and is undone if the server says no. Signed out, the button is a
-	// link to sign in that comes back here.
+	// Favouriting shows at once, however fast people click: each click flips what's shown, and
+	// whatever is showing once a request finishes is what gets saved next. If the server says no,
+	// it goes back to the last saved state. Signed out, the button is a link to sign in.
 	let {
 		id,
 		count,
@@ -13,26 +14,38 @@
 		signedIn
 	}: { id: string; count: number; favourited: boolean; signedIn: boolean } = $props();
 
+	// What the server last confirmed, and what's shown (and wanted).
+	let saved = $derived<FavouriteState>({ favourited, favourite_count: count });
 	let current = $derived<FavouriteState>({ favourited, favourite_count: count });
-	let busy = $state(false);
+	let sending = false;
 	let error = $state('');
 
-	async function toggle() {
-		if (busy) return;
-		const before = current;
-		const next = !before.favourited;
-		current = { favourited: next, favourite_count: Math.max(0, before.favourite_count + (next ? 1 : -1)) };
-		busy = true;
+	function toggle() {
+		const next = !current.favourited;
+		current = { favourited: next, favourite_count: Math.max(0, current.favourite_count + (next ? 1 : -1)) };
 		error = '';
+		if (!sending) sync();
+	}
+
+	async function sync() {
+		sending = true;
 		try {
-			const response = await fetch(`/api/characters/${id}/favourite`, { method: next ? 'PUT' : 'DELETE' });
-			if (!response.ok) throw new Error(await apiErrorMessage(response));
-			current = await response.json();
+			while (current.favourited !== saved.favourited) {
+				const want = current.favourited;
+				const response = await fetch(`/api/characters/${id}/favourite`, { method: want ? 'PUT' : 'DELETE' });
+				if (!response.ok) throw new Error(await apiErrorMessage(response));
+				saved = await response.json();
+				// Clicked again meanwhile: keep showing that, with the server's count adjusted to match.
+				current =
+					current.favourited === saved.favourited
+						? saved
+						: { favourited: current.favourited, favourite_count: Math.max(0, saved.favourite_count + (current.favourited ? 1 : -1)) };
+			}
 		} catch (err) {
-			current = before;
+			current = saved;
 			error = err instanceof Error ? err.message : 'That didn’t save. Try again.';
 		} finally {
-			busy = false;
+			sending = false;
 		}
 	}
 

@@ -34,7 +34,9 @@
 	{/if}
 </header>
 
-{#if isMyProfile}<ProfileTabs userId={data.profile.id} />{/if}
+{#if isMyProfile || data.profile.collection_count > 0}
+	<ProfileTabs userId={data.profile.id} isMe={isMyProfile} />
+{/if}
 
 <CharacterGrid
 	initial={data.characters}

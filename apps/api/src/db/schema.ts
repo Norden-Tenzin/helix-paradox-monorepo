@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { AGES } from "../attributes";
 import type { FaceFeatures } from "../dna";
 import { REPORT_REASONS } from "../types";
 
@@ -92,6 +93,12 @@ export const characters = sqliteTable(
     dnaHash: text("dna_hash"),
     // faceFeatures() of the DNA, for "more like this". Null until backfilled.
     features: text("features", { mode: "json" }).$type<FaceFeatures>(),
+    // gene_height and gene_bs_body_type, 0–255, read from the DNA (bodyMeasures in attributes.ts),
+    // for the height and build filters. Null where the DNA lacks the gene, or until backfilled.
+    height: integer("height"),
+    build: integer("build"),
+    // Chosen by the uploader, since the DNA doesn't say. Null when they didn't.
+    age: text("age", { enum: AGES }),
     // How many people favourited it. Always recounted from `favourites` when one is added or
     // removed (never nudged by ±1), so it can't drift.
     favouriteCount: integer("favourite_count").notNull().default(0),
@@ -188,6 +195,44 @@ export const favourites = sqliteTable(
     primaryKey({ columns: [t.userId, t.characterId] }),
     index("favourites_character_idx").on(t.characterId),
     index("favourites_user_created_idx").on(t.userId, t.createdAt),
+  ],
+);
+
+// Named lists of favourites ("my Norse dynasty"). Adding a character to one favourites it too, and
+// unfavouriting takes it out of all of its owner's collections, so collections are always
+// groupings of favourites. Private unless the owner makes one public.
+export const collections = sqliteTable(
+  "collections",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    public: integer("public", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at").notNull(),
+    // Bumped when characters are added, so recently used collections come first.
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [index("collections_user_updated_idx").on(t.userId, t.updatedAt)],
+);
+
+export const collectionCharacters = sqliteTable(
+  "collection_characters",
+  {
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    characterId: text("character_id")
+      .notNull()
+      .references(() => characters.id, { onDelete: "cascade" }),
+    addedAt: integer("added_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.collectionId, t.characterId] }),
+    index("collection_characters_character_idx").on(t.characterId),
+    index("collection_characters_added_idx").on(t.collectionId, t.addedAt),
   ],
 );
 

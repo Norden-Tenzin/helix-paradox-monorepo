@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { Search } from '@lucide/svelte';
 	import { apiErrorMessage, type CharacterPage, type Mod, type Sex, type Sort, type TagSummary } from '#lib/api.ts';
+	import { BASE_MOD } from 'api/games';
 	import { characterListPath, filtersToParams, readFilters, type Filters, type ListScope } from '#lib/filters.ts';
 	import { button, field } from '#lib/ui.ts';
 	import CharacterCard from './CharacterCard.svelte';
@@ -14,6 +15,7 @@
 		scope,
 		isOwner = false,
 		onDelete,
+		onRemove,
 		emptyMessage = 'No characters match these filters.'
 	}: {
 		initial: CharacterPage;
@@ -25,10 +27,16 @@
 		scope?: ListScope;
 		isOwner?: boolean;
 		onDelete?: (id: string) => Promise<void>;
+		/** Offers "Remove" on each card (a collection's owner taking it out of the collection). */
+		onRemove?: (id: string) => Promise<void>;
 		emptyMessage?: string;
 	} = $props();
 
-	const filters = $derived(readFilters(page.url));
+	// A filter click shows at once: while the new results load, the toggles show the filters being
+	// loaded and the portraits make way for placeholders. Clicks in quick succession build on each
+	// other, since each starts from what's shown.
+	const loading = $derived(!!navigating.to && navigating.to.url.pathname === page.url.pathname);
+	const filters = $derived(readFilters(loading ? navigating.to!.url : page.url));
 	const filtered = $derived(!!(filters.sex || filters.mods.length || filters.tags.length || filters.q));
 
 	// Active tags first (even ones too rare to be popular, e.g. arrived at from a character's
@@ -53,10 +61,14 @@
 	}
 
 	const setSex = (sex: Sex | undefined) => applyFilters({ sex });
-	const toggleMod = (mod: string) =>
-		applyFilters({
-			mods: filters.mods.includes(mod) ? filters.mods.filter((m) => m !== mod) : [...filters.mods, mod]
-		});
+	// Mods combine (EPE + CFP: made with both), but the base game stands alone, as on the upload
+	// form: no character is both unmodded and modded.
+	function toggleMod(mod: string) {
+		const on = filters.mods.includes(mod);
+		if (mod === BASE_MOD) return applyFilters({ mods: on ? [] : [BASE_MOD] });
+		const others = filters.mods.filter((m) => m !== BASE_MOD);
+		applyFilters({ mods: on ? others.filter((m) => m !== mod) : [...others, mod] });
+	}
 
 	const toggleTag = (tag: string) =>
 		applyFilters({
@@ -68,7 +80,8 @@
 		loadingMore = true;
 		loadError = '';
 		try {
-			const response = await fetch(characterListPath(filters, scope, cursor));
+			// The filters the shown results were loaded with.
+			const response = await fetch(characterListPath(readFilters(page.url), scope, cursor));
 			if (!response.ok) throw new Error(await apiErrorMessage(response));
 			const next: CharacterPage = await response.json();
 			// Popular order can shift while someone scrolls (a favourite lands between pages), so a
@@ -85,6 +98,11 @@
 
 	async function handleDelete(id: string) {
 		await onDelete?.(id);
+		results = results.filter((c) => c.id !== id);
+	}
+
+	async function handleRemove(id: string) {
+		await onRemove?.(id);
 		results = results.filter((c) => c.id !== id);
 	}
 
@@ -167,7 +185,21 @@
 	{/if}
 
 	<!-- Portraits -->
-	{#if results.length === 0}
+	{#if loading}
+		<div
+			class="grid grid-cols-2 gap-x-4 gap-y-10 pt-10 pb-6 sm:grid-cols-3 sm:gap-x-6 lg:grid-cols-4 xl:grid-cols-5"
+			aria-busy="true"
+			aria-label="Loading characters"
+		>
+			{#each { length: 10 } as _, i (i)}
+				<div class="motion-safe:animate-pulse">
+					<div class="aspect-[2/3] bg-surface"></div>
+					<div class="mt-3 h-5 w-3/4 bg-surface"></div>
+					<div class="mt-2 h-4 w-1/2 bg-surface"></div>
+				</div>
+			{/each}
+		</div>
+	{:else if results.length === 0}
 		<div class="py-32">
 			<p class="max-w-[28ch] text-lead">{emptyMessage}</p>
 			{#if filtered}
@@ -177,7 +209,7 @@
 	{:else}
 		<div class="grid grid-cols-2 gap-x-4 gap-y-10 pt-10 pb-6 sm:grid-cols-3 sm:gap-x-6 lg:grid-cols-4 xl:grid-cols-5">
 			{#each results as chara (chara.id)}
-				<CharacterCard {chara} {isOwner} onDelete={handleDelete} />
+				<CharacterCard {chara} {isOwner} onDelete={handleDelete} onRemove={onRemove ? handleRemove : undefined} />
 			{/each}
 		</div>
 	{/if}
@@ -186,7 +218,7 @@
 		{#if loadError}
 			<p class="text-small text-danger">{loadError}</p>
 		{/if}
-		{#if cursor}
+		{#if cursor && !loading}
 			<button onclick={loadMore} disabled={loadingMore} class={button('quiet')}>
 				{loadingMore ? 'Loading…' : `Show more · ${initial.total - results.length} left`}
 			</button>

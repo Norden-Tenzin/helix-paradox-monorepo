@@ -1,7 +1,10 @@
 <script lang="ts">
+	import { invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Check, Copy } from '@lucide/svelte';
+	import { AGE_LABELS, BUILD_LABELS, HEIGHT_LABELS } from 'api/attributes';
 	import CharacterCard from '#lib/components/CharacterCard.svelte';
+	import CollectionButton from '#lib/components/CollectionButton.svelte';
 	import FavouriteButton from '#lib/components/FavouriteButton.svelte';
 	import ReportButton from '#lib/components/ReportButton.svelte';
 	import Strand from '#lib/components/Strand.svelte';
@@ -129,6 +132,18 @@
 			<dd>{modsLabel}</dd>
 			<dt class="text-muted">Sex</dt>
 			<dd>{character.sex === 'female' ? 'Female' : 'Male'}</dd>
+			{#if character.age}
+				<dt class="text-muted">Age</dt>
+				<dd>{AGE_LABELS[character.age]}</dd>
+			{/if}
+			{#if character.height}
+				<dt class="text-muted">Height</dt>
+				<dd>{HEIGHT_LABELS[character.height]}</dd>
+			{/if}
+			{#if character.build}
+				<dt class="text-muted">Build</dt>
+				<dd>{BUILD_LABELS[character.build]}</dd>
+			{/if}
 		</dl>
 
 		{#if character.tags.length > 0}
@@ -159,6 +174,13 @@
 				count={character.favourite_count}
 				favourited={character.favourited}
 				signedIn={!!data.user}
+			/>
+			<!-- Adding to a collection favourites it too; reload the character so the count shows it. -->
+			<CollectionButton
+				id={character.id}
+				name={character.name}
+				signedIn={!!data.user}
+				onFavourited={() => invalidate((url) => url.pathname === `/api/characters/${character.id}`)}
 			/>
 			{#if isOwner}
 				<a href="/upload/{character.id}" class="link text-body">Edit</a>

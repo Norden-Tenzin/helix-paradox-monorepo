@@ -7,8 +7,28 @@
 	let {
 		chara,
 		isOwner = false,
-		onDelete
-	}: { chara: Character; isOwner?: boolean; onDelete?: (id: string) => Promise<void> } = $props();
+		onDelete,
+		onRemove
+	}: {
+		chara: Character;
+		isOwner?: boolean;
+		onDelete?: (id: string) => Promise<void>;
+		/** Takes it out of the list being shown (a collection), without deleting it. */
+		onRemove?: (id: string) => Promise<void>;
+	} = $props();
+
+	let removing = $state(false);
+	let removeError = $state('');
+	async function remove() {
+		removing = true;
+		removeError = '';
+		try {
+			await onRemove?.(chara.id);
+		} catch (err) {
+			removeError = err instanceof Error ? err.message : 'Could not remove it.';
+			removing = false;
+		}
+	}
 
 	let alertOpen = $state(false);
 	let deleting = $state(false);
@@ -57,6 +77,12 @@
 			</span>
 		{/if}
 	</p>
+	{#if onRemove}
+		<p class="mt-2 text-small">
+			<button type="button" class="link text-muted" disabled={removing} onclick={remove}>Remove from collection</button>
+		</p>
+		{#if removeError}<p class="mt-1 text-small text-danger">{removeError}</p>{/if}
+	{/if}
 	{#if isOwner}
 		<p class="mt-2 flex gap-4 text-small">
 			<a href="/upload/{chara.id}" class="link">Edit</a>

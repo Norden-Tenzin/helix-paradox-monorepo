@@ -1,11 +1,18 @@
 import { error } from '@sveltejs/kit';
 
 export type {
+	Age,
+	Build,
 	Character,
 	CharacterPage,
+	Collection,
+	CollectionChoice,
+	DiscoverPage,
+	DiscoverReason,
 	DnaReport,
 	FavouriteState,
 	GameId,
+	Height,
 	Me,
 	Mod,
 	PublicUser,

@@ -3,8 +3,9 @@
 A library of characters from Paradox games, shared with their DNA. Crusader Kings III for now: copy a
 face's DNA here, paste it into the game's Ruler Designer.
 
-Pages: `/` (landing), `/characters` (the library, filters in the URL), `/chara/:id`, `/user/:id`,
-`/upload` and `/upload/:id`, `/sign-in`, `/sign-up`.
+Pages: `/` (landing), `/characters` (the library, filters in the URL), `/chara/:id`, `/discover`,
+`/random`, `/user/:id` (with `/favourites` and `/collections`), `/collection/:id`, `/upload` and
+`/upload/:id`, `/sign-in`, `/sign-up`.
 
 ```
 apps/
@@ -23,16 +24,22 @@ are first-party and there is no CORS to configure.
 | Route                            | Description                                                   |
 | -------------------------------- | ------------------------------------------------------------- |
 | `/api/auth/*`                    | Better Auth (email + password, sign in with username or email) |
-| `GET /api/characters`            | List with `total`. Query: `author, sex, mods=epe,cfp, q, sort, cursor, limit` |
+| `GET /api/characters`            | List with `total`. Query: `author, sex, height, build, age, mods=epe,cfp, tags, q, favourites=mine, collection, sort, cursor, limit` |
+| `GET /api/characters/random`     | `{ id }` of a random visible character                        |
 | `GET /api/characters/:id`        | One character                                                 |
 | `POST /api/characters`           | Create (multipart, see below)                                 |
 | `PATCH /api/characters/:id`      | Update (owner only)                                           |
 | `DELETE /api/characters/:id`     | Delete with its R2 images (owner only)                        |
+| `POST /api/discover`             | Discover feed batch. Body: `{ seen?: id[], limit? }`          |
+| `GET /api/collections?user=`     | Someone's collections (all of your own; others' public ones)  |
+| `GET /api/collections/mine?character=` | Your collections, each saying whether it holds that character |
+| `POST/GET/PATCH/DELETE /api/collections[/:id]` | Create, read, edit, delete a collection         |
+| `PUT/DELETE /api/collections/:id/characters/:cid` | Add (also favourites it) or remove a character |
 | `GET /api/users/me`              | Signed-in user or `null`                                      |
 | `GET /api/users/:id`             | Public profile + character count                              |
 | `GET /api/images/*`              | Images served from R2                                         |
 
-Create/update take `multipart/form-data` with `name`, `sex`, `description`, `dna`, repeated `mods`,
+Create/update take `multipart/form-data` with `name`, `sex`, optional `age`, `description`, `dna`, repeated `mods`,
 a `display` image, and up to three `grid` entries. Each image entry is either a new file or the URL of
 one of the character's existing images, which keeps it. Images that an update drops are deleted from R2.
 
