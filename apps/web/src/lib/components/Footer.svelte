@@ -10,6 +10,7 @@
     >
       <li><a href="/characters" class="footer-big">Browse the library</a></li>
       <li><a href="/upload" class="footer-big">Share a character</a></li>
+      <li><a href="/convert" class="footer-big">Convert DNA</a></li>
     </ul>
 
     <div

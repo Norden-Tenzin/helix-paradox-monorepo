@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
-	"name": "helix-paradox-web",
+	"name": "helix-paradox-website",
 	"compatibility_date": "2026-10-23",
 	"compatibility_flags": ["nodejs_als"],
 	"main": ".svelte-kit/cloudflare/_worker.js",
@@ -9,6 +9,12 @@
 		"directory": ".svelte-kit/cloudflare"
 	},
 	"observability": { "enabled": true },
+	// Serve the site on its own domain (wrangler creates the DNS record and certificate on deploy).
+	// www is redirected to the apex by a Cloudflare redirect rule, so Better Auth only sees one origin.
+	"routes": [{ "pattern": "helixparadox.com", "custom_domain": true }],
+	// No *.workers.dev copy of the site: it would split links and search results, and sign-in
+	// there fails anyway because BETTER_AUTH_URL is the custom domain.
+	"workers_dev": false,
 	// /api/* is forwarded to the Hono worker over this binding (see src/hooks.server.ts).
 	"services": [{ "binding": "API", "service": "helix-paradox-api" }]
 }

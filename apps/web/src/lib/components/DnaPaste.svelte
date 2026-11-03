@@ -32,8 +32,8 @@
 	></textarea>
 
 	{#if dna.trim()}
-		<div class="mt-6">
-			<Strand {dna} interactive class="h-32" />
+		<div class="gel-ground mt-6 px-4 pt-4 pb-3">
+			<Strand {dna} variant="map" interactive />
 		</div>
 		<p class="mt-4 text-small {complete ? 'text-ink' : 'text-danger'}" aria-live="polite">
 			{#if complete}
