@@ -4,7 +4,7 @@
    but tall, so it gets the stacked layout instead. */
 @custom-variant split (@media (min-width: 64rem) and (orientation: landscape));
 
-/* Bricolage Grotesque (SIL Open Font License, static/fonts/OFL.txt), hosted here rather than
+/* Bricolage Grotesque (SIL Open Font License, static/fonts/OFL-bricolage-grotesque.txt), hosted here rather than
    loaded from Google Fonts: one less connection, and visitors' browsers don't contact Google.
    Variable in weight and optical size; each file covers a script, fetched only when used. */
 /* vietnamese */

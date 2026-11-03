@@ -4,6 +4,7 @@
 	import { WEB_ANALYTICS_TOKEN } from '$app/env/public';
 	import Footer from '#lib/components/Footer.svelte';
 	import Navbar from '#lib/components/Navbar.svelte';
+	import RootkeeperBand from '#lib/components/RootkeeperBand.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -48,6 +49,7 @@
 		{@render children()}
 	</main>
 {/if}
+{#if !page.url.pathname.startsWith('/admin')}<RootkeeperBand />{/if}
 <Footer />
 
 <style>

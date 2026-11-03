@@ -57,6 +57,10 @@
     <a href="/characters" class="nav-link" aria-current={current("/characters")}
       >Library</a
     >
+    <!-- "Convert" alone on phones, so the bar still fits beside the account. -->
+    <a href="/convert" class="nav-link" aria-current={current("/convert")}
+      >Convert <span class="max-sm:hidden">DNA</span></a
+    >
     <!-- <a href="/discover" class="nav-link" aria-current={current('/discover')}>Discover</a> -->
     <!-- On phones there's no room: it's in the account menu, and on the home page. -->
     <a
