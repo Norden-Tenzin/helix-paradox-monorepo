@@ -31,6 +31,7 @@
     "./dna": "./src/dna.ts",
     "./attributes": "./src/attributes.ts",
     "./games": "./src/games.ts",
-    "./tag-names": "./src/tag-names.ts"
+    "./tag-names": "./src/tag-names.ts",
+    "./dna-convert": "./src/dna-convert.ts"
   }
 }

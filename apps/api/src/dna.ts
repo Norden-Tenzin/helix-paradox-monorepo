@@ -28,7 +28,7 @@ export const MIN_GENES = 20;
 const GENE_PATTERN = /([a-z0-9_]+)\s*=\s*\{([^{}]*)\}/gi;
 
 /** The text inside `genes={ ... }`, or the whole string when there is no such block. */
-function genesBlock(dna: string) {
+export function genesBlock(dna: string) {
   const open = /\bgenes\s*=\s*\{/.exec(dna);
   if (!open) return dna;
   let depth = 1;
