@@ -25,7 +25,7 @@ export const modRoutes = new Hono<AppEnv>()
     const body: Mod[] = rows
       .filter((m) => m.status === "listed" || parsed.data.pending)
       .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
-      .map((m) => ({ id: m.id, name: m.name, pending: m.status === "pending" }));
+      .map((m) => ({ id: m.id, name: m.name, pending: m.status === "pending", url: m.url }));
     return c.json(body);
   });
 

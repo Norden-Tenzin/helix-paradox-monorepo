@@ -114,6 +114,7 @@ export const adminRoutes = new Hono<AppEnv>()
       id: mod.id,
       name: mod.name,
       pending: mod.status === "pending",
+      url: mod.url,
       signature_genes: mod.genes.length,
       characters: uses.find((u) => u.mod === mod.id)?.n ?? 0,
       created_by: creator ? displayName(creator) : null,
@@ -121,20 +122,27 @@ export const adminRoutes = new Hono<AppEnv>()
     return c.json(body);
   })
 
-  // List or unlist a mod, or fix its name.
+  // List or unlist a mod, fix its name, or set where to get it (null or "" removes the link).
   .patch("/mods/:id", async (c) => {
     const parsed = z
       .object({
         game: z.enum(GAME_IDS).default(DEFAULT_GAME),
         name: z.string().trim().min(1).max(60).optional(),
         listed: z.boolean().optional(),
+        url: z
+          .union([z.literal(""), z.null(), z.url({ protocol: /^https?$/ }).max(500)])
+          .optional(),
       })
       .safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) throw new HTTPException(400, { message: "Send { name?, listed? }" });
-    const { game, name, listed } = parsed.data;
+    if (!parsed.success) throw new HTTPException(400, { message: "Send { name?, listed?, url? } (url must be an http(s) link)" });
+    const { game, name, listed, url } = parsed.data;
     const result = await c.var.db
       .update(mods)
-      .set({ ...(name ? { name } : {}), ...(listed === undefined ? {} : { status: listed ? "listed" : "pending" }) })
+      .set({
+        ...(name ? { name } : {}),
+        ...(listed === undefined ? {} : { status: listed ? "listed" : "pending" }),
+        ...(url === undefined ? {} : { url: url || null }),
+      })
       .where(and(eq(mods.game, game), eq(mods.id, c.req.param("id"))))
       .returning({ id: mods.id });
     if (result.length === 0) throw new HTTPException(404, { message: "Mod not found" });

@@ -13,6 +13,8 @@ import type { Collection, CollectionChoice } from "../types";
 const MAX_COLLECTIONS = 50;
 const MAX_CHARACTERS = 500;
 const COVERS = 4;
+/** Collections listed on a character's page. */
+const MAX_LISTED = 12;
 
 const normalizeNewlines = (s: string) => s.replace(/\r\n?/g, "\n");
 
@@ -134,10 +136,22 @@ async function addCharacter(db: Db, collectionId: string, characterId: string, u
 
 export const collectionRoutes = new Hono<AppEnv>()
   // Someone's collections, most recently changed first: the public ones, or all of your own.
+  // With `character` instead, the public collections that character is in (for its page).
   .get("/", async (c) => {
     const owner = c.req.query("user");
-    if (!owner) throw new HTTPException(400, { message: "Say whose collections" });
+    const character = c.req.query("character");
     const viewer = await viewerId(c);
+    if (character) {
+      const rows = await c.var.db
+        .select({ id: collections.id })
+        .from(collections)
+        .innerJoin(collectionCharacters, eq(collectionCharacters.collectionId, collections.id))
+        .where(and(eq(collectionCharacters.characterId, character), eq(collections.public, true)))
+        .orderBy(desc(collections.updatedAt))
+        .limit(MAX_LISTED);
+      return c.json(await summaries(c.var.db, rows, viewer));
+    }
+    if (!owner) throw new HTTPException(400, { message: "Say whose collections, or which character's" });
     const rows = await c.var.db
       .select({ id: collections.id })
       .from(collections)

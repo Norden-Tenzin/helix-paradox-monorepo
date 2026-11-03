@@ -10,7 +10,10 @@
   let { user }: { user: Me | null } = $props();
 
   // On the home page the bar sits over the tapestry, on a scrim so it reads against the stitching.
+  // It stays fixed while you scroll, and turns solid once it leaves the picture's top edge.
   const overPicture = $derived(page.url.pathname === "/");
+  let scrollY = $state(0);
+  const scrolled = $derived(scrollY > 8);
   const shareHref = $derived(
     user ? "/upload" : `/sign-up?redirect=${encodeURIComponent("/upload")}`,
   );
@@ -27,6 +30,8 @@
   }
 </script>
 
+<svelte:window bind:scrollY />
+
 <a
   href="#main"
   class="fixed top-2 left-2 z-50 -translate-y-24 bg-accent px-4 py-2 text-small text-accent-ink focus:translate-y-0"
@@ -36,7 +41,7 @@
 
 <header
   class={overPicture
-    ? "scrim absolute inset-x-0 top-0 z-20 text-ink"
+    ? `scrim fixed inset-x-0 top-0 z-20 text-ink ${scrolled ? "solid" : ""}`
     : "sticky top-0 z-20 bg-ground text-ink"}
 >
   <nav
@@ -125,6 +130,32 @@
     );
     padding-bottom: 2.5rem;
     text-shadow: 0 1px 12px color-mix(in oklab, var(--bg) 70%, transparent);
+    transition:
+      padding-bottom 250ms var(--ease-out),
+      text-shadow 250ms var(--ease-out);
+  }
+  /* A solid layer fades in over the gradient (gradients themselves don't animate). */
+  .scrim::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--bg);
+    opacity: 0;
+    transition: opacity 250ms var(--ease-out);
+  }
+  .scrim.solid {
+    padding-bottom: 0;
+    text-shadow: none;
+  }
+  .scrim.solid::before {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scrim,
+    .scrim::before {
+      transition: none;
+    }
   }
   :global(.nav-link) {
     position: relative;

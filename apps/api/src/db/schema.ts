@@ -99,6 +99,8 @@ export const characters = sqliteTable(
     // How many people favourited it. Always recounted from `favourites` when one is added or
     // removed (never nudged by ±1), so it can't drift.
     favouriteCount: integer("favourite_count").notNull().default(0),
+    // How many people said it works in their game, recounted from `confirmations` like favourites.
+    confirmCount: integer("confirm_count").notNull().default(0),
     // How many times it's been viewed, at most once per person per day (views.ts). Not shown yet.
     viewCount: integer("view_count").notNull().default(0),
     // Set when enough people report it (see reports.ts); hidden from everyone but its owner
@@ -128,6 +130,8 @@ export const mods = sqliteTable(
     name: text("name").notNull(),
     genes: text("genes", { mode: "json" }).$type<string[]>().notNull().default([]),
     status: text("status", { enum: ["listed", "pending"] }).notNull().default("listed"),
+    // Where to get it (a Steam Workshop page, say), so a character's page can link to it. Set by admins.
+    url: text("url"),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
   },
@@ -193,6 +197,22 @@ export const favourites = sqliteTable(
     index("favourites_character_idx").on(t.characterId),
     index("favourites_user_created_idx").on(t.userId, t.createdAt),
   ],
+);
+
+// "Works in my game ✓": one row per person per character they got working. Not for the
+// character's own author. Cleared when its DNA changes, since they tried the old DNA.
+export const confirmations = sqliteTable(
+  "confirmations",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    characterId: text("character_id")
+      .notNull()
+      .references(() => characters.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.characterId] }), index("confirmations_character_idx").on(t.characterId)],
 );
 
 // Named lists of favourites ("my Norse dynasty"). Adding a character to one favourites it too, and

@@ -5,15 +5,26 @@ import { z } from "zod";
 import { BUILD_RANGES, BUILDS, bodyMeasures, buildBand, HEIGHT_RANGES, HEIGHTS, heightBand } from "../attributes";
 import { requireUser, viewer as whoIsAsking, viewerId, type AppEnv } from "../context";
 import type { Db } from "../db";
-import { characterMods, characters, characterTags, collectionCharacters, collections, favourites, reports, user } from "../db/schema";
+import { characterMods, characters, characterTags, collectionCharacters, collections, confirmations, favourites, mods as modsTable, reports, user } from "../db/schema";
 import { dnaFingerprint, dnaSex, faceDistance, faceFeatures, guessMods, MIN_GENES, parseDna } from "../dna";
-import { DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
+import { BASE_MOD, DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
 import { deleteImages, imageUrl, MAX_GRID_IMAGES, putImage, toStoredValue, validateImage } from "../images";
 import { gameMods, namedMod, signatures } from "../mods";
 import { hideIfReportedEnough, visibleTo } from "../reports";
 import { recountTags, resolveTags } from "../tags";
 import { recordView } from "../views";
-import { REPORT_REASONS, type Character, type CharacterPage, type FavouriteState, type Mod, type ReportReason, type Tag } from "../types";
+import {
+  REPORT_REASONS,
+  type Character,
+  type CharacterDetail,
+  type CharacterPage,
+  type ConfirmState,
+  type FavouriteState,
+  type Mod,
+  type ModNeed,
+  type ReportReason,
+  type Tag,
+} from "../types";
 
 const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 48;
@@ -92,14 +103,16 @@ export const characterColumns = (viewer: string | null) => ({
   height: characters.height,
   build: characters.build,
   favourite_count: characters.favouriteCount,
+  confirm_count: characters.confirmCount,
   hidden_at: characters.hiddenAt,
-  mods_json: sql<string>`(select json_group_array(json_object('id', "mods"."id", 'name', "mods"."name", 'pending', "mods"."status" = 'pending'))
+  mods_json: sql<string>`(select json_group_array(json_object('id', "mods"."id", 'name', "mods"."name", 'pending', "mods"."status" = 'pending', 'url', "mods"."url"))
     from "character_mods" join "mods" on "mods"."game" = "characters"."game" and "mods"."id" = "character_mods"."mod"
     where "character_mods"."cid" = "characters"."id")`,
   tags_json: sql<string>`(select json_group_array(json_object('id', "tags"."id", 'name', "tags"."name"))
     from "character_tags" join "tags" on "tags"."game" = "characters"."game" and "tags"."id" = "character_tags"."tag"
     where "character_tags"."cid" = "characters"."id")`,
   favourited: sql<number>`exists (select 1 from "favourites" where "favourites"."character_id" = "characters"."id" and "favourites"."user_id" = ${viewer ?? ""})`,
+  confirmed: sql<number>`exists (select 1 from "confirmations" where "confirmations"."character_id" = "characters"."id" and "confirmations"."user_id" = ${viewer ?? ""})`,
   reported: sql<number>`exists (select 1 from "reports" where "reports"."character_id" = "characters"."id" and "reports"."reporter_id" = ${viewer ?? ""} and "reports"."status" = 'open')`,
   // One entry per open report; counted by reason in toCharacters.
   open_report_reasons: sql<string>`(select json_group_array("reports"."reason") from "reports"
@@ -108,7 +121,7 @@ export const characterColumns = (viewer: string | null) => ({
 
 type CharacterRow = Omit<
   Character,
-  "mods" | "tags" | "game" | "height" | "build" | "favourited" | "hidden" | "reported" | "open_reports"
+  "mods" | "tags" | "game" | "height" | "build" | "favourited" | "confirmed" | "hidden" | "reported" | "open_reports"
 > & {
   game: string;
   height: number | null;
@@ -117,6 +130,7 @@ type CharacterRow = Omit<
   mods_json: string;
   tags_json: string;
   favourited: number;
+  confirmed: number;
   reported: number;
   open_report_reasons: string;
 };
@@ -132,11 +146,12 @@ export function toCharacters(rows: CharacterRow[]): Character[] {
       build: buildBand(r.build),
       display_image: imageUrl(r.display_image),
       grid_images: r.grid_images.map(imageUrl),
-      mods: (JSON.parse(mods_json) as { id: string; name: string; pending: number }[]).map(
-        (m): Mod => ({ id: m.id, name: m.name, pending: !!m.pending }),
+      mods: (JSON.parse(mods_json) as { id: string; name: string; pending: number; url: string | null }[]).map(
+        (m): Mod => ({ id: m.id, name: m.name, pending: !!m.pending, url: m.url }),
       ),
       tags: JSON.parse(tags_json) as Tag[],
       favourited: !!r.favourited,
+      confirmed: !!r.confirmed,
       hidden: r.hidden_at !== null,
       reported: !!r.reported,
       open_reports: [...new Set(reasons)].map((reason) => ({ reason, count: reasons.filter((x) => x === reason).length })),
@@ -202,6 +217,44 @@ async function resolveDna(db: Db, fields: CharacterFields, userId: string, kept?
     features: faceFeatures(fields.dna),
     ...bodyMeasures(genes),
   };
+}
+
+/** Recounts a character's "works in my game" confirmations from the rows themselves. */
+const recountConfirmations = (db: Db, id: string) =>
+  db
+    .update(characters)
+    .set({
+      confirmCount: sql`(select count(*) from ${confirmations} where ${confirmations.characterId} = ${id})`,
+    })
+    .where(eq(characters.id, id));
+
+async function confirmState(db: Db, id: string, userId: string): Promise<ConfirmState> {
+  const [[row], [mine]] = await Promise.all([
+    db.select({ count: characters.confirmCount }).from(characters).where(eq(characters.id, id)),
+    db
+      .select({ id: confirmations.characterId })
+      .from(confirmations)
+      .where(and(eq(confirmations.userId, userId), eq(confirmations.characterId, id))),
+  ]);
+  return { confirmed: !!mine, confirm_count: row?.count ?? 0 };
+}
+
+/**
+ * The mods a character needs installed (not the base game), each with how many of its DNA's
+ * genes come from that mod: the game ignores those without it.
+ */
+async function modNeeds(db: Db, character: Character): Promise<ModNeed[]> {
+  const needed = character.mods.filter((m) => m.id !== BASE_MOD);
+  if (needed.length === 0) return [];
+  const rows = await db
+    .select({ id: modsTable.id, genes: modsTable.genes })
+    .from(modsTable)
+    .where(and(eq(modsTable.game, character.game), inArray(modsTable.id, needed.map((m) => m.id))));
+  const names = new Set(parseDna(character.dna).map((g) => g.name));
+  return needed.map((m) => ({
+    ...m,
+    genes: rows.find((r) => r.id === m.id)?.genes.filter((g) => names.has(g)).length ?? 0,
+  }));
 }
 
 async function getCharacter(db: Db, id: string, viewer: string | null) {
@@ -359,15 +412,16 @@ export const characterRoutes = new Hono<AppEnv>()
     }
 
     const order = sort === "oldest" ? asc : desc;
-    // Popular: most favourited this week first, so new characters people like can climb above
-    // old ones with big totals; then all-time favourites. (Names written out in full: drizzle
-    // leaves columns unqualified inside correlated subqueries.)
+    // Popular: most favourites and "works in my game" this week first, so new characters people
+    // like can climb above old ones with big totals; then all-time totals. (Names written out in
+    // full: drizzle leaves columns unqualified inside correlated subqueries.)
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const popularFirst =
       sort === "popular"
         ? [
-            desc(sql`(select count(*) from "favourites" where "favourites"."character_id" = "characters"."id" and "favourites"."created_at" > ${weekAgo})`),
-            desc(characters.favouriteCount),
+            desc(sql`(select count(*) from "favourites" where "favourites"."character_id" = "characters"."id" and "favourites"."created_at" > ${weekAgo})
+              + (select count(*) from "confirmations" where "confirmations"."character_id" = "characters"."id" and "confirmations"."created_at" > ${weekAgo})`),
+            desc(sql`${characters.favouriteCount} + ${characters.confirmCount}`),
           ]
         : [];
     const where = and(...conditions);
@@ -426,7 +480,38 @@ export const characterRoutes = new Hono<AppEnv>()
     if (!row || (row.hidden_at !== null && row.author_id !== asking?.id && !asking?.admin)) {
       throw new HTTPException(404, { message: "Character not found" });
     }
-    return c.json(toCharacters([row])[0]);
+    const character = toCharacters([row])[0];
+    const body: CharacterDetail = { ...character, needs: await modNeeds(c.var.db, character) };
+    return c.json(body);
+  })
+
+  // "Works in my game ✓", for anyone but its author. Idempotent, like favouriting.
+  .put("/:id/works", requireUser, async (c) => {
+    const id = c.req.param("id");
+    const db = c.var.db;
+    const [target] = await db
+      .select({ authorId: characters.authorId })
+      .from(characters)
+      .where(and(eq(characters.id, id), visibleTo(c.var.user.id)));
+    if (!target) throw new HTTPException(404, { message: "Character not found" });
+    if (target.authorId === c.var.user.id) {
+      throw new HTTPException(400, { message: "Only other people can say your character works for them" });
+    }
+    await db.batch([
+      db.insert(confirmations).values({ userId: c.var.user.id, characterId: id, createdAt: Date.now() }).onConflictDoNothing(),
+      recountConfirmations(db, id),
+    ]);
+    return c.json(await confirmState(db, id, c.var.user.id));
+  })
+
+  .delete("/:id/works", requireUser, async (c) => {
+    const id = c.req.param("id");
+    const db = c.var.db;
+    await db.batch([
+      db.delete(confirmations).where(and(eq(confirmations.userId, c.var.user.id), eq(confirmations.characterId, id))),
+      recountConfirmations(db, id),
+    ]);
+    return c.json(await confirmState(db, id, c.var.user.id));
   })
 
   // Favouriting is idempotent: doing it twice, or unfavouriting something you never favourited,
@@ -629,6 +714,10 @@ export const characterRoutes = new Hono<AppEnv>()
         // Tags it lost, and tags it gained (also under its previous game, if that changed).
         recountTags(c.var.db, fields.game, [...new Set([...oldTags.map((t) => t.tag), ...tagIds])]),
         recountTags(c.var.db, existing.game, oldTags.map((t) => t.tag)),
+        // People confirmed the old DNA, so a new one starts over.
+        ...(fields.dna === existing.dna
+          ? []
+          : [c.var.db.delete(confirmations).where(eq(confirmations.characterId, id)), recountConfirmations(c.var.db, id)]),
       ]);
     } catch (err) {
       await deleteImages(c.env.BUCKET, images.uploaded);

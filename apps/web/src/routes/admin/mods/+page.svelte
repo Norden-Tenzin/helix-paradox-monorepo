@@ -8,9 +8,11 @@
 
 	let renaming = $state<string | null>(null);
 	let newName = $state('');
+	let linking = $state<string | null>(null);
+	let newUrl = $state('');
 	let error = $state('');
 
-	async function update(id: string, change: { name?: string; listed?: boolean }) {
+	async function update(id: string, change: { name?: string; listed?: boolean; url?: string }) {
 		error = '';
 		const response = await fetch(`/api/admin/mods/${id}`, {
 			method: 'PATCH',
@@ -19,6 +21,7 @@
 		});
 		if (!response.ok) error = await apiErrorMessage(response);
 		renaming = null;
+		linking = null;
 		await invalidateAll();
 	}
 </script>
@@ -29,18 +32,21 @@
 
 <p class="mb-8 max-w-[70ch] text-body text-muted">
 	Pending mods were named by uploaders whose DNA had genes we didn’t recognise. They show on their characters and on the
-	upload form; <strong class="font-medium text-ink">list</strong> one to offer it in the library’s filters too.
+	upload form; <strong class="font-medium text-ink">list</strong> one to offer it in the library’s filters too. A
+	mod’s <strong class="font-medium text-ink">link</strong> (its Steam Workshop page, say) shows on its characters’ pages,
+	so people can install it before pasting the DNA.
 </p>
 {#if error}<p class="mb-4 text-small text-danger" role="alert">{error}</p>{/if}
 
 <div class="overflow-x-auto">
-	<table class="w-full min-w-[640px] text-left text-small">
+	<table class="w-full min-w-[800px] text-left text-small">
 		<thead class="text-muted">
 			<tr class="border-b border-raised">
 				<th class="py-3 pr-4 font-normal">Mod</th>
 				<th class="py-3 pr-4 font-normal">Status</th>
 				<th class="py-3 pr-4 font-normal tabular-nums">Characters</th>
 				<th class="py-3 pr-4 font-normal tabular-nums" title="Genes that identify it from a DNA string">Signature genes</th>
+				<th class="py-3 pr-4 font-normal">Link</th>
 				<th class="py-3 pr-4 font-normal">Named by</th>
 				<th class="py-3 font-normal"><span class="sr-only">Actions</span></th>
 			</tr>
@@ -63,11 +69,35 @@
 					<td class="py-3 pr-4 tabular-nums {mod.signature_genes === 0 ? 'text-muted' : ''}">
 						{mod.signature_genes === 0 ? 'none (picked by hand)' : mod.signature_genes}
 					</td>
+					<td class="py-3 pr-4">
+						{#if linking === mod.id}
+							<!-- Saving it empty removes the link. -->
+							<form class="flex gap-2" onsubmit={(e) => (e.preventDefault(), update(mod.id, { url: newUrl.trim() }))}>
+								<input
+									bind:value={newUrl}
+									type="url"
+									placeholder="https://steamcommunity.com/…"
+									class="{field} h-9 w-64 text-small"
+									aria-label="Link for {mod.name}"
+								/>
+								<button type="submit" class={button('solid', 'sm')}>Save</button>
+							</form>
+						{:else if mod.url}
+							<a href={mod.url} class="link block max-w-48 truncate" target="_blank" rel="noopener noreferrer">{mod.url}</a>
+						{:else}
+							<span class="text-muted">{mod.id === 'vanilla' ? 'Base game' : 'None'}</span>
+						{/if}
+					</td>
 					<td class="py-3 pr-4 text-muted">{mod.created_by ?? 'Seeded'}</td>
 					<td class="py-3 text-right whitespace-nowrap">
 						{#if mod.id !== 'vanilla'}
 							<button type="button" class="link mr-4" onclick={() => update(mod.id, { listed: mod.pending })}>
 								{mod.pending ? 'List' : 'Unlist'}
+							</button>
+						{/if}
+						{#if mod.id !== 'vanilla'}
+							<button type="button" class="link mr-4" onclick={() => ((linking = mod.id), (newUrl = mod.url ?? ''))}>
+								{mod.url ? 'Change link' : 'Add link'}
 							</button>
 						{/if}
 						<button type="button" class="link" onclick={() => ((renaming = mod.id), (newName = mod.name))}>Rename</button>

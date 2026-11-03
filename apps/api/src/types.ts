@@ -16,6 +16,14 @@ export interface Mod {
   id: string;
   name: string;
   pending: boolean;
+  /** Where to get it (a Steam Workshop page, say), if an admin has added one. */
+  url: string | null;
+}
+
+/** A mod a character needs, on its page: where to get it, and how many of its DNA's genes only that mod has. */
+export interface ModNeed extends Mod {
+  /** The DNA's genes from this mod, which the game ignores without it. */
+  genes: number;
 }
 
 /** A tag as it appears on a character; `id` is its slug, used in URLs and filters. */
@@ -51,12 +59,28 @@ export interface Character {
   favourite_count: number;
   /** Whether the person asking has favourited it (always false when signed out). */
   favourited: boolean;
+  /** How many people said it works in their game. */
+  confirm_count: number;
+  /** Whether the person asking said it works in their game. */
+  confirmed: boolean;
   /** Hidden after several reports, until reviewed. Only its owner (and admins) still see it. */
   hidden: boolean;
   /** Whether the person asking has an open report on it. */
   reported: boolean;
   /** For its owner only: open reports by reason (never who sent them). Empty for everyone else. */
   open_reports: { reason: ReportReason; count: number }[];
+}
+
+/** One character on its own page (GET /api/characters/:id). */
+export interface CharacterDetail extends Character {
+  /** Mods other than the base game that its DNA needs, to install before pasting it. */
+  needs: ModNeed[];
+}
+
+/** After saying it works, or taking that back (PUT/DELETE /api/characters/:id/works). */
+export interface ConfirmState {
+  confirmed: boolean;
+  confirm_count: number;
 }
 
 /** After favouriting or unfavouriting (PUT/DELETE /api/characters/:id/favourite). */
@@ -147,6 +171,7 @@ export interface AdminMod {
   id: string;
   name: string;
   pending: boolean;
+  url: string | null;
   /** How many genes identify it (0: it can only be picked by hand). */
   signature_genes: number;
   characters: number;

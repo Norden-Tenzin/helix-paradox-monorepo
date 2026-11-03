@@ -317,7 +317,7 @@
 							: ''}"
 					>
 						{#if displayPreview}
-							<img src={displayPreview} class="absolute inset-0 h-full w-full object-cover" alt="Portrait preview" />
+							<img src={displayPreview} class="absolute inset-0 h-full w-full object-cover object-[50%_20%]" alt="Portrait preview" />
 							<span
 								class="absolute inset-x-0 bottom-0 bg-black/70 px-4 py-3 text-small opacity-0 transition-opacity group-hover:opacity-100"
 							>

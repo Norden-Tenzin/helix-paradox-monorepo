@@ -3,7 +3,9 @@ import { error } from '@sveltejs/kit';
 export type {
 	Build,
 	Character,
+	CharacterDetail,
 	CharacterPage,
+	ConfirmState,
 	Collection,
 	CollectionChoice,
 	DiscoverPage,
@@ -14,6 +16,7 @@ export type {
 	Height,
 	Me,
 	Mod,
+	ModNeed,
 	PublicUser,
 	AdminMod,
 	AdminTag,

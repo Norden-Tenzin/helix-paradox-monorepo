@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 
+/* Wide and landscape: room for things side by side. A portrait iPad Pro is as wide as a laptop
+   but tall, so it gets the stacked layout instead. */
+@custom-variant split (@media (min-width: 64rem) and (orientation: landscape));
+
 /* Helix Paradox — warm black ground, white ink, one gold accent, one family (Bricolage Grotesque). */
 
 @theme inline {

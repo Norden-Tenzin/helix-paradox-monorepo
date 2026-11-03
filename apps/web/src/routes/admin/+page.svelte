@@ -50,7 +50,7 @@
 		{#each data.reported as { character, reports } (character.id)}
 			<li class="grid gap-5 bg-surface p-5 sm:grid-cols-[6rem_1fr]">
 				<a href="/chara/{character.id}" class="block aspect-[2/3] w-24 overflow-hidden bg-raised">
-					<img src={character.display_image} alt="" class="h-full w-full object-cover" />
+					<img src={character.display_image} alt="" class="h-full w-full object-cover object-[50%_20%]" />
 				</a>
 				<div class="min-w-0">
 					<p class="flex flex-wrap items-baseline gap-x-3">
