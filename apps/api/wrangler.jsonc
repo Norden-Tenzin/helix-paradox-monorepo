@@ -5,6 +5,8 @@
   "compatibility_date": "2026-10-23",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
+  // No per-version preview URLs either: the API is only reached through the site.
+  "preview_urls": false,
   "observability": { "enabled": true },
   // Run the worker near its D1 database rather than near each visitor: every page makes a few
   // queries, and each one would otherwise cross the world. Only applies once deployed.
