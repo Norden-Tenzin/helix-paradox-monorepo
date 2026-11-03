@@ -11,9 +11,7 @@
   "placement": { "mode": "smart" },
   "vars": {
     "BETTER_AUTH_URL": "https://helixparadox.com",
-    // Verification emails come from here (see src/email.ts). The domain must be onboarded in
-    // Cloudflare: Compute > Email Service > Email Sending.
-    "EMAIL_FROM": "noreply@helixparadox.com"
+    "EMAIL_FROM": "noreply@mail.helixparadox.com"
   },
   // Cloudflare Email Service. "remote": wrangler dev reaches the real service too, but local dev
   // prints emails instead of sending them (src/email.ts).
