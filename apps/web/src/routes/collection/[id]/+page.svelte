@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '#lib/components/Seo.svelte';
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Lock } from '@lucide/svelte';
@@ -52,14 +53,12 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{collection.name} · Helix Paradox</title>
-	{#if collection.public}
-		<meta property="og:title" content="{collection.name} · Helix Paradox" />
-		<meta property="og:description" content="A collection of Crusader Kings III characters by {collection.owner_name}." />
-		<meta property="og:url" content={page.url.origin + page.url.pathname} />
-	{/if}
-</svelte:head>
+<Seo
+	title="{collection.name}, a CK3 character collection · Helix Paradox"
+	description={collection.description ||
+		`${collection.count} Crusader Kings 3 characters collected by ${collection.owner_name}, each with DNA to copy.`}
+	noindex={!collection.public || collection.count === 0}
+/>
 
 <header class="wrap flex flex-col gap-6 pt-16 pb-10 sm:flex-row sm:items-end sm:justify-between sm:pt-24">
 	<div>

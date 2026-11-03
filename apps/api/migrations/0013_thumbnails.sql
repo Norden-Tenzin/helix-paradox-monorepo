@@ -1,0 +1,1 @@
+ALTER TABLE `characters` ADD `thumb_image` text;

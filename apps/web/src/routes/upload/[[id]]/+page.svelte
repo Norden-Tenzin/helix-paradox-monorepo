@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Seo from "#lib/components/Seo.svelte";
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
   import { ImagePlus, X } from "@lucide/svelte";
@@ -151,15 +152,18 @@
   }
 
   /** Shrinks screenshots before upload; the API rejects images over 5MB. */
-  async function compress(file: File) {
-    const { default: imageCompression } = await import(
-      "browser-image-compression"
-    );
+  async function compress(file: File, size: { maxSizeMB: number; maxWidthOrHeight: number } = { maxSizeMB: 2, maxWidthOrHeight: 2560 }) {
+    const [{ default: imageCompression }, { default: libURL }] = await Promise.all([
+      import("browser-image-compression"),
+      // The worker loads the library from jsDelivr unless told otherwise; serve our own copy
+      // so the CSP (vite.config.ts) needn't allow another script host.
+      import("browser-image-compression/dist/browser-image-compression.js?url"),
+    ]);
     return imageCompression(file, {
-      maxSizeMB: 2,
-      maxWidthOrHeight: 2560,
+      ...size,
       fileType: "image/webp",
       useWebWorker: true,
+      libURL: new URL(libURL, location.href).href,
     });
   }
 
@@ -186,6 +190,13 @@
         }
       };
       await append("display", displayImage!);
+      // A small copy of a new portrait for cards and lists, so the library doesn't load every
+      // portrait at full size, and phones get it on the character page too. 1200px on the long
+      // side is about 800 wide for a portrait.
+      if (typeof displayImage !== "string") {
+        const thumb = await compress(displayImage!, { maxSizeMB: 0.25, maxWidthOrHeight: 1200 });
+        form.append("displayThumb", thumb, thumb.name);
+      }
       for (const img of gridImages) if (img) await append("grid", img);
 
       const response = await fetch(
@@ -212,11 +223,10 @@
   const step = "text-lead";
 </script>
 
-<svelte:head>
-  <title
-    >{isEditMode ? `Edit ${existing?.name}` : "Share a character"} · Helix Paradox</title
-  >
-</svelte:head>
+<Seo
+  title="{isEditMode ? `Edit ${existing?.name}` : 'Share a character'} · Helix Paradox"
+  noindex
+/>
 
 <div class="wrap pt-16 pb-24 sm:pt-24">
   <header class="max-w-[52ch]">
@@ -497,8 +507,13 @@
     </section>
 
     <!-- Send -->
+    <p class="border-t border-raised pt-8 text-small text-muted">
+      By sharing, you confirm the character is yours to share and follows the
+      <a href="/terms" class="link">content rules</a>. Its DNA will be free for
+      anyone to use.
+    </p>
     <div
-      class="flex flex-col gap-4 border-t border-raised pt-8 sm:flex-row sm:items-center sm:gap-6"
+      class="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6"
     >
       <button type="submit" disabled={isLoading} class={button("accent")}>
         {#if isLoading}

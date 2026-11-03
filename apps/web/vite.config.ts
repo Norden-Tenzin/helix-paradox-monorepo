@@ -17,7 +17,33 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			adapter: adapter(),
+			// Content Security Policy for every page. SvelteKit adds a nonce for its own inline
+			// scripts (and app.html's, via %sveltekit.nonce%). Everything else must come from here
+			// or Cloudflare (Turnstile on sign-up, Web Analytics). Other headers are set in
+			// hooks.server.ts and static/_headers.
+			csp: {
+				mode: 'auto',
+				directives: {
+					'default-src': ['self'],
+					// Turnstile, and Cloudflare Web Analytics' beacon (+layout.svelte).
+					'script-src': ['self', 'https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com'],
+					// Inline style attributes (style:prop, transitions) are part of how Svelte works.
+					'style-src': ['self', 'unsafe-inline'],
+					'font-src': ['self'],
+					// Some older characters' pictures live on other hosts; blob: and data: are
+					// previews of pictures being uploaded.
+					'img-src': ['self', 'data:', 'blob:', 'https:'],
+					'connect-src': ['self', 'https://cloudflareinsights.com'],
+					'frame-src': ['https://challenges.cloudflare.com'],
+					// The upload page shrinks pictures in a worker built from a blob: URL.
+					'worker-src': ['self', 'blob:'],
+					'frame-ancestors': ['self'],
+					'base-uri': ['self'],
+					'form-action': ['self'],
+					'object-src': ['none']
+				}
+			}
 		})
 	]
 });

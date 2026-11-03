@@ -106,6 +106,12 @@
                 onSelect={() => goto("/admin")}>Admin</DropdownMenu.Item
               >
             {/if}
+            <DropdownMenu.Item
+              class={menuItem}
+              onSelect={() => goto("/account")}
+            >
+              Account
+            </DropdownMenu.Item>
             <DropdownMenu.Item class={menuItem} onSelect={signOut}
               >Sign out</DropdownMenu.Item
             >

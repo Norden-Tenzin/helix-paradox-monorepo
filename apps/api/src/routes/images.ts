@@ -9,6 +9,9 @@ export const imageRoutes = new Hono<AppEnv>().get("/:key{.+}", async (c) => {
   object.writeHttpMetadata(headers);
   headers.set("etag", object.httpEtag);
   headers.set("cache-control", "public, max-age=31536000, immutable");
+  // Uploads are only ever shown as images: never let a browser treat one as a page or script.
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox");
 
   // Precondition (If-None-Match etc.) matched: R2 returns the object without a body.
   if (!("body" in object)) return new Response(null, { status: 304, headers });

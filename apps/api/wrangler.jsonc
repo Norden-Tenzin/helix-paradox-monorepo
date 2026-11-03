@@ -16,6 +16,13 @@
   // Cloudflare Email Service. "remote": wrangler dev reaches the real service too, but local dev
   // prints emails instead of sending them (src/email.ts).
   "send_email": [{ "name": "EMAIL", "remote": true }],
+  // Request limits (src/rate-limit.ts). namespace_id is any number unique to this account.
+  // period is 10 or 60 seconds.
+  "ratelimits": [
+    { "name": "AUTH_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
+    { "name": "UPLOAD_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
+    { "name": "WRITE_LIMITER", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

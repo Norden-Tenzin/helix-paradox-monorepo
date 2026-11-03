@@ -3,9 +3,10 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { displayName, requireAdmin, type AppEnv } from "../context";
-import { characterMods, characters, characterTags, mods, reports, tags, user } from "../db/schema";
+import { characterMods, characters, characterTags, mods, reports, session, tags, user } from "../db/schema";
 import { DEFAULT_GAME, GAME_IDS } from "../games";
-import { deleteImages, imageUrl } from "../images";
+import { deleteImages, imagesOf, imageUrl } from "../images";
+import { deleteCharactersOf } from "../accounts";
 import { setHidden } from "../reports";
 import { recountTags, tagSlug } from "../tags";
 import type { AdminMod, AdminTag, ReportedCharacter, ReportReason } from "../types";
@@ -46,7 +47,8 @@ export const adminRoutes = new Hono<AppEnv>()
           name: character.name,
           author_id: author.id,
           author_name: displayName(author),
-          display_image: imageUrl(character.displayImage),
+          author_banned: author.bannedAt !== null,
+          display_image: imageUrl(character.thumbImage ?? character.displayImage),
           hidden: character.hiddenAt !== null,
         },
         reports: open
@@ -80,7 +82,7 @@ export const adminRoutes = new Hono<AppEnv>()
         db.delete(characters).where(eq(characters.id, id)),
         recountTags(db, character.game, tagged.map((t) => t.tag)),
       ]);
-      await deleteImages(c.env.BUCKET, [character.displayImage, ...character.gridImages]);
+      await deleteImages(c.env.BUCKET, imagesOf(character));
       return c.json({ deleted: true });
     }
 
@@ -90,6 +92,53 @@ export const adminRoutes = new Hono<AppEnv>()
       .where(and(eq(reports.characterId, id), eq(reports.status, "open")));
     await setHidden(db, id, action === "hide");
     return c.json({ hidden: action === "hide" });
+  })
+
+  // Bans an account: it can't sign in or change anything any more (auth.ts, requireUser), it's
+  // signed out everywhere, and its characters are hidden, or deleted with their pictures when
+  // remove is true. Open reports on its characters are marked upheld.
+  .post("/users/:id/ban", async (c) => {
+    const id = c.req.param("id");
+    const db = c.var.db;
+    const parsed = z.object({ remove: z.boolean().default(false) }).safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) throw new HTTPException(400, { message: "Send { remove?: boolean }" });
+    const [target] = await db.select({ role: user.role }).from(user).where(eq(user.id, id));
+    if (!target) throw new HTTPException(404, { message: "User not found" });
+    if (target.role === "admin") throw new HTTPException(400, { message: "Admins can't be banned" });
+
+    const owned = await db.select().from(characters).where(eq(characters.authorId, id));
+    const ids = owned.map((ch) => ch.id);
+    await db.batch([
+      db.update(user).set({ bannedAt: Date.now() }).where(eq(user.id, id)),
+      db.delete(session).where(eq(session.userId, id)),
+      ...(ids.length > 0
+        ? [
+            db
+              .update(reports)
+              .set({ status: "upheld", reviewedBy: c.var.user.id, reviewedAt: Date.now() })
+              .where(and(inArray(reports.characterId, ids), eq(reports.status, "open"))),
+          ]
+        : []),
+    ]);
+
+    if (parsed.data.remove) {
+      await deleteCharactersOf(db, c.env.BUCKET, id);
+    } else {
+      for (const character of owned) await setHidden(db, character.id, true);
+    }
+    return c.json({ banned: true, characters: owned.length, removed: parsed.data.remove });
+  })
+
+  // Lets a banned account sign in again. Its characters stay hidden: show them one by one from
+  // the reports list, or the owner can ask.
+  .post("/users/:id/unban", async (c) => {
+    const result = await c.var.db
+      .update(user)
+      .set({ bannedAt: null })
+      .where(eq(user.id, c.req.param("id")))
+      .returning({ id: user.id });
+    if (result.length === 0) throw new HTTPException(404, { message: "User not found" });
+    return c.json({ banned: false });
   })
 
   // Every mod for a game, pending ones (named by uploaders) first.

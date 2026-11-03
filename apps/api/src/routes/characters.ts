@@ -8,9 +8,9 @@ import type { Db } from "../db";
 import { characterMods, characters, characterTags, collectionCharacters, collections, confirmations, favourites, mods as modsTable, reports, user } from "../db/schema";
 import { dnaFingerprint, dnaSex, faceDistance, faceFeatures, guessMods, MIN_GENES, parseDna } from "../dna";
 import { BASE_MOD, DEFAULT_GAME, GAME_IDS, type GameId } from "../games";
-import { deleteImages, imageUrl, MAX_GRID_IMAGES, putImage, toStoredValue, validateImage } from "../images";
+import { deleteImages, imagesOf, imageUrl, MAX_GRID_IMAGES, prepareImage, putImage, toStoredValue, type PreparedImage } from "../images";
 import { gameMods, namedMod, signatures } from "../mods";
-import { hideIfReportedEnough, visibleTo } from "../reports";
+import { hideIfReportedEnough, notifyAdminsOfReport, visibleTo } from "../reports";
 import { recountTags, resolveTags } from "../tags";
 import { recordView } from "../views";
 import {
@@ -99,6 +99,7 @@ export const characterColumns = (viewer: string | null) => ({
   posted_at: characters.postedAt,
   updated_at: characters.updatedAt,
   display_image: characters.displayImage,
+  thumb_image: characters.thumbImage,
   grid_images: characters.gridImages,
   height: characters.height,
   build: characters.build,
@@ -121,8 +122,9 @@ export const characterColumns = (viewer: string | null) => ({
 
 type CharacterRow = Omit<
   Character,
-  "mods" | "tags" | "game" | "height" | "build" | "favourited" | "confirmed" | "hidden" | "reported" | "open_reports"
+  "mods" | "tags" | "game" | "height" | "build" | "favourited" | "confirmed" | "hidden" | "reported" | "open_reports" | "thumb_image"
 > & {
+  thumb_image: string | null;
   game: string;
   height: number | null;
   build: number | null;
@@ -145,6 +147,7 @@ export function toCharacters(rows: CharacterRow[]): Character[] {
       height: heightBand(r.height),
       build: buildBand(r.build),
       display_image: imageUrl(r.display_image),
+      thumb_image: imageUrl(r.thumb_image ?? r.display_image),
       grid_images: r.grid_images.map(imageUrl),
       mods: (JSON.parse(mods_json) as { id: string; name: string; pending: number; url: string | null }[]).map(
         (m): Mod => ({ id: m.id, name: m.name, pending: !!m.pending, url: m.url }),
@@ -288,19 +291,27 @@ async function readCharacterForm(req: Request) {
     throw new HTTPException(400, { message: parsed.error.issues.map((i) => i.message).join(", ") });
   }
 
-  const display = form.get("display");
-  const grid = form.getAll("grid");
-  if (!display) throw new HTTPException(400, { message: "Primary image is required" });
-  if (grid.length > MAX_GRID_IMAGES) {
+  const rawDisplay = form.get("display");
+  const rawGrid = form.getAll("grid");
+  if (!rawDisplay) throw new HTTPException(400, { message: "Primary image is required" });
+  if (rawGrid.length > MAX_GRID_IMAGES) {
     throw new HTTPException(400, { message: `At most ${MAX_GRID_IMAGES} gallery images` });
   }
-  for (const entry of [display, ...grid]) {
-    if (typeof entry !== "string") {
-      const error = validateImage(entry);
-      if (error) throw new HTTPException(400, { message: error });
-    }
-  }
-  return { fields: parsed.data, display, grid };
+  // New files are checked by their bytes and stripped of metadata; strings refer to images the
+  // character already has.
+  const prepare = async (entry: File | string): Promise<PreparedImage | string> => {
+    if (typeof entry === "string") return entry;
+    const image = await prepareImage(entry);
+    if (typeof image === "string") throw new HTTPException(400, { message: image });
+    return image;
+  };
+  const display = await prepare(rawDisplay);
+  const grid = await Promise.all(rawGrid.map(prepare));
+  // The upload page sends a small copy of a new portrait for cards (thumb_image). Only with a new
+  // portrait file: a kept portrait keeps its thumbnail.
+  const rawThumb = form.get("displayThumb");
+  const thumb = typeof display !== "string" && rawThumb && typeof rawThumb !== "string" ? await prepare(rawThumb) : null;
+  return { fields: parsed.data, display, thumb: thumb as PreparedImage | null, grid };
 }
 
 /**
@@ -310,12 +321,13 @@ async function readCharacterForm(req: Request) {
 async function resolveImages(
   bucket: R2Bucket,
   characterId: string,
-  display: File | string,
-  grid: (File | string)[],
+  display: PreparedImage | string,
+  thumb: PreparedImage | null,
+  grid: (PreparedImage | string)[],
   existing: Set<string>,
 ) {
   const uploaded: string[] = [];
-  const resolve = async (entry: File | string) => {
+  const resolve = async (entry: PreparedImage | string) => {
     if (typeof entry === "string") {
       const stored = toStoredValue(entry);
       if (!existing.has(stored)) throw new HTTPException(400, { message: "Unknown image reference" });
@@ -327,8 +339,9 @@ async function resolveImages(
   };
   try {
     const displayImage = await resolve(display);
+    const thumbImage = thumb ? await resolve(thumb) : null;
     const gridImages = await Promise.all(grid.map(resolve));
-    return { displayImage, gridImages, uploaded };
+    return { displayImage, thumbImage, gridImages, uploaded };
   } catch (err) {
     await deleteImages(bucket, uploaded);
     throw err;
@@ -598,7 +611,7 @@ export const characterRoutes = new Hono<AppEnv>()
     const parsed = reportBody.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) throw new HTTPException(400, { message: parsed.error.issues.map((i) => i.message).join(", ") });
     const [target] = await db
-      .select({ authorId: characters.authorId })
+      .select({ authorId: characters.authorId, name: characters.name })
       .from(characters)
       .where(and(eq(characters.id, id), visibleTo(c.var.user.id)));
     if (!target) throw new HTTPException(404, { message: "Character not found" });
@@ -609,7 +622,11 @@ export const characterRoutes = new Hono<AppEnv>()
       .insert(reports)
       .values({ characterId: id, reporterId: c.var.user.id, ...report })
       .onConflictDoUpdate({ target: [reports.characterId, reports.reporterId], set: { ...report, reviewedBy: null, reviewedAt: null } });
-    await hideIfReportedEnough(db, id);
+    const { open, hidden } = await hideIfReportedEnough(db, id);
+    // After the response, so the reporter doesn't wait on email.
+    c.executionCtx.waitUntil(
+      notifyAdminsOfReport(c.env, db, { characterId: id, characterName: target.name, ...parsed.data, open, hidden }),
+    );
     return c.json({ reported: true });
   })
 
@@ -636,13 +653,13 @@ export const characterRoutes = new Hono<AppEnv>()
   })
 
   .post("/", requireUser, async (c) => {
-    const { fields, display, grid } = await readCharacterForm(c.req.raw);
+    const { fields, display, thumb, grid } = await readCharacterForm(c.req.raw);
     if (typeof display === "string") throw new HTTPException(400, { message: "Primary image must be a file" });
 
     const id = crypto.randomUUID();
     const resolved = await resolveDna(c.var.db, fields, c.var.user.id);
     const tagIds = await resolveTags(c.var.db, fields.game, fields.tags, c.var.user.id);
-    const images = await resolveImages(c.env.BUCKET, id, display, grid, new Set());
+    const images = await resolveImages(c.env.BUCKET, id, display, thumb, grid, new Set());
     const now = Date.now();
     try {
       await c.var.db.batch([
@@ -661,6 +678,7 @@ export const characterRoutes = new Hono<AppEnv>()
           postedAt: now,
           updatedAt: now,
           displayImage: images.displayImage,
+          thumbImage: images.thumbImage,
           gridImages: images.gridImages,
         }),
         c.var.db.insert(characterMods).values(resolved.mods.map((mod) => ({ cid: id, mod }))),
@@ -677,7 +695,7 @@ export const characterRoutes = new Hono<AppEnv>()
   .patch("/:id", requireUser, async (c) => {
     const id = c.req.param("id");
     const existing = await getOwnedCharacter(c.var.db, id, c.var.user.id);
-    const { fields, display, grid } = await readCharacterForm(c.req.raw);
+    const { fields, display, thumb, grid } = await readCharacterForm(c.req.raw);
     const currentMods = await c.var.db.select({ mod: characterMods.mod }).from(characterMods).where(eq(characterMods.cid, id));
     const resolved = await resolveDna(c.var.db, fields, c.var.user.id, {
       dna: existing.dna,
@@ -686,8 +704,12 @@ export const characterRoutes = new Hono<AppEnv>()
     const tagIds = await resolveTags(c.var.db, fields.game, fields.tags, c.var.user.id);
     const oldTags = await c.var.db.select({ tag: characterTags.tag }).from(characterTags).where(eq(characterTags.cid, id));
 
-    const previous = [existing.displayImage, ...existing.gridImages];
-    const images = await resolveImages(c.env.BUCKET, id, display, grid, new Set(previous));
+    const previous = imagesOf(existing);
+    const images = await resolveImages(c.env.BUCKET, id, display, thumb, grid, new Set(previous));
+    // Same portrait as before: keep its thumbnail. A different one (a new file without a
+    // thumbnail, or a gallery picture moved up) shows in full until it has one.
+    const thumbImage =
+      images.thumbImage ?? (images.displayImage === existing.displayImage ? existing.thumbImage : null);
     try {
       await c.var.db.batch([
         c.var.db
@@ -703,6 +725,7 @@ export const characterRoutes = new Hono<AppEnv>()
             height: resolved.height,
             build: resolved.build,
             displayImage: images.displayImage,
+            thumbImage,
             gridImages: images.gridImages,
             updatedAt: Date.now(),
           })
@@ -725,7 +748,7 @@ export const characterRoutes = new Hono<AppEnv>()
     }
 
     // Only remove the images that are no longer referenced.
-    const kept = new Set([images.displayImage, ...images.gridImages]);
+    const kept = new Set([images.displayImage, thumbImage, ...images.gridImages]);
     await deleteImages(
       c.env.BUCKET,
       previous.filter((img) => !kept.has(img)),
@@ -742,6 +765,6 @@ export const characterRoutes = new Hono<AppEnv>()
       c.var.db.delete(characters).where(eq(characters.id, id)),
       recountTags(c.var.db, existing.game, oldTags.map((t) => t.tag)),
     ]);
-    await deleteImages(c.env.BUCKET, [existing.displayImage, ...existing.gridImages]);
+    await deleteImages(c.env.BUCKET, imagesOf(existing));
     return c.json({ success: true });
   });

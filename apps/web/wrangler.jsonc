@@ -9,6 +9,10 @@
 		"directory": ".svelte-kit/cloudflare"
 	},
 	"observability": { "enabled": true },
+	// Public: Cloudflare Turnstile's site key for the sign-up check (src/env.ts). Its secret is the
+	// API's TURNSTILE_SECRET_KEY. Replace with the key from Dashboard > Turnstile.
+	// WEB_ANALYTICS_TOKEN: Cloudflare Web Analytics (no cookies); empty turns it off.
+	"vars": { "TURNSTILE_SITE_KEY": "0x4AAAAAAFx8Hy0GTRnb0RvE", "WEB_ANALYTICS_TOKEN": "f3ab62d1374646ec8a8f9663a0ba54" },
 	// Serve the site on its own domain (wrangler creates the DNS record and certificate on deploy).
 	// www is redirected to the apex by a Cloudflare redirect rule, so Better Auth only sees one origin.
 	"routes": [{ "pattern": "helixparadox.com", "custom_domain": true }],

@@ -1,6 +1,7 @@
 import { and, count, eq, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "./db";
-import { characters, characterTags, reports } from "./db/schema";
+import { characters, characterTags, reports, user } from "./db/schema";
+import { escapeHtml, sendEmail } from "./email";
 import { recountTags } from "./tags";
 
 /** Open reports from this many different people hide a character until someone reviews them. */
@@ -20,9 +21,41 @@ export async function hideIfReportedEnough(db: Db, characterId: string) {
     .select({ open: count() })
     .from(reports)
     .where(and(eq(reports.characterId, characterId), eq(reports.status, "open")));
-  if (open < HIDE_AFTER_REPORTS) return false;
+  if (open < HIDE_AFTER_REPORTS) return { open, hidden: false };
   await setHidden(db, characterId, true);
-  return true;
+  return { open, hidden: true };
+}
+
+/**
+ * Emails every admin about a report: when a character gets its first open report, and when
+ * enough reports hide it. Reports in between don't email, so one pile-on is two emails at most.
+ */
+export async function notifyAdminsOfReport(
+  env: Env,
+  db: Db,
+  report: { characterId: string; characterName: string; reason: string; note: string; open: number; hidden: boolean },
+) {
+  if (report.open !== 1 && !(report.hidden && report.open === HIDE_AFTER_REPORTS)) return;
+  const admins = await db.select({ email: user.email }).from(user).where(eq(user.role, "admin"));
+  const review = new URL("/admin", env.BETTER_AUTH_URL).href;
+  const headline = report.hidden
+    ? `"${report.characterName}" has ${report.open} reports and is now hidden`
+    : `"${report.characterName}" was reported`;
+  const text = [
+    headline + ".",
+    "",
+    `Reason: ${report.reason}${report.note ? ` (${report.note})` : ""}`,
+    "",
+    `Review it: ${review}`,
+  ].join("\n");
+  const html = text
+    .split("\n")
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("")
+    .replace(escapeHtml(review), `<a href="${escapeHtml(review)}">${escapeHtml(review)}</a>`);
+  await Promise.all(
+    admins.map((a) => sendEmail(env, { to: a.email, subject: `Report: ${headline}`, text, html }).catch(() => {})),
+  );
 }
 
 /** Hides or shows a character, recounting its tags so popular tags only count visible ones. */

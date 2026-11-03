@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Seo from "#lib/components/Seo.svelte";
   import { apiErrorMessage } from "#lib/api.ts";
   import CharacterGrid from "#lib/components/CharacterGrid.svelte";
   import ProfileTabs from "#lib/components/ProfileTabs.svelte";
@@ -17,9 +18,12 @@
   }
 </script>
 
-<svelte:head>
-  <title>{data.profile.name} · Helix Paradox</title>
-</svelte:head>
+<Seo
+  title="{data.profile.name}’s CK3 characters · Helix Paradox"
+  description="{data.profile.character_count} Crusader Kings 3 characters shared by {data.profile.name}, each with DNA to copy into the Ruler Designer."
+  type="profile"
+  noindex={data.profile.character_count === 0}
+/>
 
 <header
   class="wrap flex flex-col gap-6 pt-16 pb-10 sm:flex-row sm:items-end sm:justify-between sm:pt-24"

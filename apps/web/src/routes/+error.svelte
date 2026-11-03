@@ -1,13 +1,12 @@
 <script lang="ts">
+	import Seo from '#lib/components/Seo.svelte';
 	import { page } from '$app/state';
 	import { button } from '#lib/ui.ts';
 
 	const notFound = $derived(page.status === 404);
 </script>
 
-<svelte:head>
-	<title>{notFound ? 'Not found' : 'Something went wrong'} · Helix Paradox</title>
-</svelte:head>
+<Seo title="{notFound ? 'Not found' : 'Something went wrong'} · Helix Paradox" noindex />
 
 <div class="wrap pt-24 pb-32 sm:pt-32">
 	<p class="text-[clamp(6rem,24vw,20rem)] leading-[0.8] font-semibold tracking-[-0.06em] text-accent" aria-hidden="true">

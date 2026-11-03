@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '#lib/components/Seo.svelte';
 	import AuthShell from '#lib/components/AuthShell.svelte';
 	import { button } from '#lib/ui.ts';
 	import type { PageProps } from './$types';
@@ -9,9 +10,7 @@
 	const signInHref = $derived(`/sign-in?redirect=${encodeURIComponent(data.redirectTo)}`);
 </script>
 
-<svelte:head>
-	<title>Confirm your email · Helix Paradox</title>
-</svelte:head>
+<Seo title="Confirm your email · Helix Paradox" noindex />
 
 <AuthShell
 	title={expired ? 'That link has expired' : 'That link didn’t work'}

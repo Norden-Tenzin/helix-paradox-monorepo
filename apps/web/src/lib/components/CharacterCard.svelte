@@ -55,7 +55,7 @@
 	<a href="/chara/{chara.id}" class="block aspect-[2/3] overflow-hidden bg-surface">
 		<img
 			class="h-full w-full object-cover object-[50%_20%] transition-[scale] duration-300 ease-out group-hover:scale-[1.04]"
-			src={chara.display_image}
+			src={chara.thumb_image}
 			alt="Portrait of {chara.name}"
 			loading="lazy"
 		/>

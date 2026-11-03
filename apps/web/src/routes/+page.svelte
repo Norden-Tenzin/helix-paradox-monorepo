@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Seo from "#lib/components/Seo.svelte";
   import DnaPaste from "#lib/components/DnaPaste.svelte";
   import ImageCredit from "#lib/components/ImageCredit.svelte";
   import Strand from "#lib/components/Strand.svelte";
@@ -35,13 +36,11 @@
   );
 </script>
 
-<svelte:head>
-  <title>Helix Paradox · Character DNA for Crusader Kings III</title>
-  <meta
-    name="description"
-    content="A library of Crusader Kings III characters, shared with their DNA. Copy a face, paste it into the Ruler Designer."
-  />
-</svelte:head>
+<Seo
+  title="CK3 character DNA for Crusader Kings 3 · Helix Paradox"
+  description="A free library of Crusader Kings 3 (CK3) character DNA. Copy a face’s Ruler Designer code and paste it into your game, or share your own."
+  imageAlt="The Bayeux Tapestry: Harold is crowned while people point at a comet overhead."
+/>
 
 <!-- HERO: what the site is for, said plainly, beside a real character you can copy right now.
      The tapestry takes whatever height is left, so the whole hero fits one screen. -->
@@ -50,7 +49,9 @@
     class="relative h-[30svh] overflow-hidden bg-surface sm:h-auto sm:min-h-[140px] sm:flex-1"
   >
     <img
-      src="/images/bayeux-comet.jpg"
+      src="/images/bayeux-comet-1600.webp"
+      srcset="/images/bayeux-comet-800.webp 800w, /images/bayeux-comet-1600.webp 1600w, /images/bayeux-comet-2000.webp 2000w"
+      sizes="100vw"
       alt="The Bayeux Tapestry: Harold is crowned while people point at a comet overhead, 1066."
       width="2400"
       height="1542"
@@ -70,11 +71,11 @@
         <h1
           class="text-[clamp(2rem,1.5rem+3.2vw,4rem)] leading-[0.98] tracking-[-0.04em]"
         >
-          Share and copy Crusader Kings III DNA.
+          Share and copy Crusader Kings 3 DNA.
         </h1>
         <p class="mt-5 max-w-[46ch] text-body text-muted">
-          Find a face you like, copy its Ruler Designer DNA and paste it into
-          your game. Or share your own.
+          Find a face you like, copy its CK3 Ruler Designer DNA and paste it
+          into your game. Or share your own.
         </p>
         <div class="mt-7 flex flex-wrap gap-3">
           <a href="/characters" class={button("accent")}>Browse the library</a>
@@ -97,7 +98,7 @@
             class="frame block h-36 overflow-hidden bg-raised sm:row-span-2 sm:h-full"
           >
             <img
-              src={featured.display_image}
+              src={featured.thumb_image}
               alt="{featured.name}, shared by {featured.author_name}"
               class="h-full w-full object-cover object-[50%_20%]"
             />
@@ -168,7 +169,7 @@
               class="frame block aspect-[2/3] overflow-hidden bg-surface"
             >
               <img
-                src={chara.display_image}
+                src={chara.thumb_image}
                 alt="{chara.name}, shared by {chara.author_name}"
                 loading="lazy"
                 class="h-full w-full object-cover"
@@ -233,7 +234,9 @@
           </p>
           <figure class="mt-5" data-reveal>
             <img
-              src="/images/effigy-lady.jpg"
+              src="/images/effigy-lady-1600.webp"
+              srcset="/images/effigy-lady-800.webp 800w, /images/effigy-lady-1600.webp 1600w"
+              sizes="(min-width: 1024px) 50vw, 100vw"
               alt="A carved stone tomb effigy of a lady lying with her hands folded, on a stone base."
               width="1600"
               height="1180"

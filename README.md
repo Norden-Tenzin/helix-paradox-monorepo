@@ -66,9 +66,11 @@ cd apps/api
 wrangler d1 create helix-db            # paste the database_id into wrangler.jsonc
 wrangler r2 bucket create helix-images
 wrangler secret put BETTER_AUTH_SECRET
+wrangler secret put TURNSTILE_SECRET_KEY   # from Dashboard > Turnstile; put its site key in apps/web/wrangler.jsonc
 # set BETTER_AUTH_URL in wrangler.jsonc to the site's public URL
 pnpm db:migrate:remote
 pnpm deploy
+pnpm db:backfill-thumbs:remote          # once: card thumbnails for characters shared before them (needs cwebp)
 
 cd ../web
 pnpm build && wrangler deploy           # binds to the helix-paradox-api worker as API

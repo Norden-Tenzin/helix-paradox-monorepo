@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Seo from "#lib/components/Seo.svelte";
+  import { jsonLd } from "#lib/seo.ts";
   import { invalidate } from "$app/navigation";
   import { page } from "$app/state";
   import { Check, Copy, ExternalLink } from "@lucide/svelte";
@@ -18,10 +20,37 @@
   const character = $derived(data.character);
   const images = $derived([character.display_image, ...character.grid_images]);
   const geneCount = $derived(parseDna(character.dna).length);
+  // Thumbnails are about 800px wide (1200 on the long side); the full portrait up to 2560.
+  const hasThumb = $derived(character.thumb_image !== character.display_image);
+  const portraitSrcset = $derived(`${character.thumb_image} 800w, ${character.display_image} 2560w`);
+  const PORTRAIT_SIZES = "(min-width: 1024px) 58vw, 100vw";
   const isOwner = $derived(data.user?.id === character.author_id);
   const shareText = $derived(
-    `${character.name}, a Crusader Kings III character${character.mods.length ? ` (${character.mods.map((m) => m.name).join(", ")})` : ""} by ${character.author_name}. Copy the DNA and paste it into the Ruler Designer.`,
+    `${character.name}, a Crusader Kings 3 (CK3) character${character.mods.length ? ` (${character.mods.map((m) => m.name).join(", ")})` : ""} by ${character.author_name}. Copy the DNA and paste it into the Ruler Designer.`,
   );
+  // What search engines read about the character (schema.org CreativeWork).
+  const structuredData = $derived({
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    name: character.name,
+    description: character.description || shareText,
+    url: page.url.origin + page.url.pathname,
+    image: new URL(character.display_image, page.url.origin).href,
+    author: {
+      "@type": "Person",
+      name: character.author_name,
+      url: `${page.url.origin}/user/${character.author_id}`,
+    },
+    dateCreated: new Date(character.posted_at).toISOString(),
+    dateModified: new Date(character.updated_at).toISOString(),
+    keywords: [
+      "Crusader Kings 3",
+      "CK3 DNA",
+      ...character.mods.map((m) => m.name),
+      ...character.tags.map((t) => t.name),
+    ].join(", "),
+    isPartOf: { "@type": "WebSite", name: "Helix Paradox", url: page.url.origin },
+  });
   const longDate = (ms: number) =>
     new Date(ms).toLocaleDateString("en-GB", {
       day: "numeric",
@@ -66,20 +95,27 @@
 </script>
 
 <!-- Share previews (chat apps, social sites) need absolute URLs, and show the portrait large. -->
-<svelte:head>
-  <title>{character.name} · Helix Paradox</title>
-  <meta name="description" content={shareText} />
-  <meta property="og:type" content="article" />
-  <meta property="og:title" content="{character.name} · Helix Paradox" />
-  <meta property="og:description" content={shareText} />
-  <meta property="og:url" content={page.url.origin + page.url.pathname} />
-  <meta
-    property="og:image"
-    content={new URL(character.display_image, page.url.origin).href}
+<!-- Share previews (chat apps, social sites) show the portrait large. -->
+<Seo
+  title="{character.name} — CK3 character DNA · Helix Paradox"
+  description={shareText}
+  type="article"
+  image={character.display_image}
+  imageAlt="Portrait of {character.name}"
+  largeImage
+  noindex={character.hidden}
+>
+  <link
+    rel="preload"
+    as="image"
+    href={character.display_image}
+    imagesrcset={hasThumb ? portraitSrcset : undefined}
+    imagesizes={hasThumb ? PORTRAIT_SIZES : undefined}
+    fetchpriority="high"
   />
-  <meta property="og:image:alt" content="Portrait of {character.name}" />
-  <meta name="twitter:card" content="summary_large_image" />
-</svelte:head>
+  <!-- Escaped by jsonLd: the only {@html} on the site, and it carries no markup of ours. -->
+  {@html jsonLd(structuredData)}
+</Seo>
 
 <article
   class="wrap grid grid-cols-1 gap-x-12 gap-y-10 pt-8 pb-24 lg:grid-cols-12 [&>*]:min-w-0"
@@ -91,8 +127,13 @@
          thumbnails, and the others are already loaded when picked. -->
     <div class="grid bg-surface">
       {#each images as img, i (i)}
+        <!-- The portrait is what the page is waiting for: fetch it first, and the small copy where
+             that's sharp enough. The other pictures wait their turn. -->
         <img
           src={img}
+          srcset={i === 0 && hasThumb ? portraitSrcset : undefined}
+          sizes={i === 0 && hasThumb ? PORTRAIT_SIZES : undefined}
+          fetchpriority={i === 0 ? "high" : "low"}
           alt="Portrait of {character.name}{i > 0
             ? `, picture ${i + 1} of ${images.length}`
             : ''}"
@@ -119,8 +160,10 @@
           >
             <!-- Cropped towards the top, where the face usually is. -->
             <img
-              src={img}
+              src={i === 0 ? character.thumb_image : img}
               alt=""
+              loading="lazy"
+              fetchpriority="low"
               class="aspect-[2/3] w-full object-cover object-[50%_20%]"
             />
           </button>

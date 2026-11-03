@@ -73,15 +73,44 @@ async function getCurrentUser(event: RequestEvent): Promise<Me | null> {
 	}
 }
 
+/**
+ * Sent with every response the worker makes, pages and API alike. (Static files get the same
+ * from apps/web/_headers; the Content Security Policy is in vite.config.ts.)
+ */
+const SECURITY_HEADERS: Record<string, string> = {
+	// Never guess a type other than the one sent: an upload labelled image/png stays an image.
+	'x-content-type-options': 'nosniff',
+	'referrer-policy': 'strict-origin-when-cross-origin',
+	// Older browsers' version of CSP frame-ancestors: no framing by other sites (clickjacking).
+	'x-frame-options': 'SAMEORIGIN',
+	'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+	// HTTPS only, for a year. Not in dev, which runs on plain http://localhost.
+	...(dev ? {} : { 'strict-transport-security': 'max-age=31536000; includeSubDomains' })
+};
+
+function secure(response: Response) {
+	let headers = response.headers;
+	try {
+		for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+		return response;
+	} catch {
+		// Some responses (Response.redirect) have read-only headers; copy those first.
+		const copy = new Response(response.body, response);
+		headers = copy.headers;
+		for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+		return copy;
+	}
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	if (event.url.pathname.startsWith('/api/')) {
 		try {
-			return await callApi(event, event.request);
+			return secure(await callApi(event, event.request));
 		} catch (err) {
 			console.error('API proxy failed', err);
-			return Response.json({ error: 'The API is unreachable. Try again in a moment.' }, { status: 502 });
+			return secure(Response.json({ error: 'The API is unreachable. Try again in a moment.' }, { status: 502 }));
 		}
 	}
 	event.locals.user = await getCurrentUser(event);
-	return resolve(event);
+	return secure(await resolve(event));
 };

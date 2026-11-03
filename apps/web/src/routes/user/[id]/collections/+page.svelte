@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '#lib/components/Seo.svelte';
 	import { goto } from '$app/navigation';
 	import { apiErrorMessage } from '#lib/api.ts';
 	import CollectionCard from '#lib/components/CollectionCard.svelte';
@@ -23,9 +24,11 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{isMe ? 'Your collections' : `${data.profile.name}’s collections`} · Helix Paradox</title>
-</svelte:head>
+<Seo
+	title="{isMe ? 'Your collections' : `${data.profile.name}’s collections`} · Helix Paradox"
+	description="Collections of Crusader Kings 3 characters made by {data.profile.name}."
+	noindex={data.profile.collection_count === 0}
+/>
 
 <header class="wrap flex flex-col gap-6 pt-16 pb-10 sm:flex-row sm:items-end sm:justify-between sm:pt-24">
 	<div>

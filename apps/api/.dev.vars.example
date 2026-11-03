@@ -4,3 +4,5 @@ BETTER_AUTH_SECRET=replace-with-a-long-random-string
 BETTER_AUTH_URL=http://localhost:5173
 # Emails go through Cloudflare Email Service (the EMAIL binding in wrangler.jsonc); no key needed.
 # With BETTER_AUTH_URL on localhost, verification emails are printed to this worker's console instead.
+# Turnstile's test secret: every check passes. Production: wrangler secret put TURNSTILE_SECRET_KEY
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Seo from "#lib/components/Seo.svelte";
   import { goto } from "$app/navigation";
   import { ArrowLeftRight, Check, Copy, Upload } from "@lucide/svelte";
   import { convertDna, detectFormat } from "api/dna-convert";
@@ -65,13 +66,10 @@
   }
 </script>
 
-<svelte:head>
-  <title>CK3 DNA converter · Helix Paradox</title>
-  <meta
-    name="description"
-    content="Convert Crusader Kings III DNA between base64 codes and Ruler Designer text, both ways, in your browser."
-  />
-</svelte:head>
+<Seo
+  title="CK3 DNA converter · Helix Paradox"
+  description="Convert Crusader Kings 3 DNA between base64 codes and Ruler Designer text, both ways, in your browser."
+/>
 
 <div class="wrap pt-16 pb-24 sm:pt-24">
   <header class="max-w-[56ch]">

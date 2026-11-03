@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './layout.css';
 	import { navigating, page } from '$app/state';
+	import { WEB_ANALYTICS_TOKEN } from '$app/env/public';
 	import Footer from '#lib/components/Footer.svelte';
 	import Navbar from '#lib/components/Navbar.svelte';
 	import type { LayoutProps } from './$types';
@@ -24,13 +25,15 @@
 	});
 </script>
 
+<!-- Cloudflare Web Analytics: page views and where visitors came from, with no cookies and nothing
+     that identifies a visitor. Only once WEB_ANALYTICS_TOKEN is set (wrangler.jsonc). -->
 <svelte:head>
-	<title>Helix Paradox</title>
-	<meta name="description" content="Share and copy character DNA from Paradox games, starting with Crusader Kings III." />
-	<meta property="og:site_name" content="Helix Paradox" />
-	<!-- Character pages share their portrait instead; scrapers take the first og:image they see. -->
-	{#if page.route.id !== '/chara/[id]'}
-		<meta property="og:image" content={new URL('/images/bayeux-comet.jpg', page.url.origin).href} />
+	{#if WEB_ANALYTICS_TOKEN}
+		<script
+			defer
+			src="https://static.cloudflareinsights.com/beacon.min.js"
+			data-cf-beacon={JSON.stringify({ token: WEB_ANALYTICS_TOKEN })}
+		></script>
 	{/if}
 </svelte:head>
 

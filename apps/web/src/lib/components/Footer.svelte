@@ -37,10 +37,16 @@
       </div>
     </div>
 
-    <p class="text-small text-ground/75 md:col-span-12">
-      A fan project. Not affiliated with or endorsed by Paradox Interactive.
-      Crusader Kings is a trademark of Paradox Interactive AB.
-    </p>
+    <div class="flex flex-col gap-3 text-small text-ground/75 md:col-span-12 md:flex-row md:justify-between md:gap-8">
+      <p>
+        A non-commercial fan project. Not affiliated with or endorsed by Paradox
+        Interactive. Crusader Kings is a trademark of Paradox Interactive AB.
+      </p>
+      <p class="flex shrink-0 gap-6">
+        <a href="/terms" class="link">Terms and content rules</a>
+        <a href="/privacy" class="link">Privacy</a>
+      </p>
+    </div>
   </div>
 
   <!-- The name returns, its feet cut by the page's bottom edge. -->

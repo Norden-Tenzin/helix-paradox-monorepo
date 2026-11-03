@@ -40,7 +40,7 @@ export async function sendEmail(env: Env, email: Email) {
   }
 }
 
-const escapeHtml = (s: string) =>
+export const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
 export function verificationEmail(to: string, name: string, url: string): Email {

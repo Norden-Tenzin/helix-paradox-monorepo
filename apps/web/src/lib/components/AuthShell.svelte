@@ -11,7 +11,9 @@
 <div class="grid min-h-[calc(100svh-4rem)] grid-rows-[auto_1fr] split:grid-cols-12 split:grid-rows-1">
 	<div class="relative h-56 overflow-hidden bg-surface sm:h-72 split:col-span-6 split:h-auto">
 		<img
-			src="/images/bayeux-oath.jpg"
+			src="/images/bayeux-oath-1400.webp"
+			srcset="/images/bayeux-oath-800.webp 800w, /images/bayeux-oath-1400.webp 1400w, /images/bayeux-oath-2000.webp 2000w"
+			sizes="(min-width: 1024px) 50vw, 100vw"
 			alt="The Bayeux Tapestry: Harold swears an oath to Duke William with his hands on two reliquaries."
 			width="2000"
 			height="838"

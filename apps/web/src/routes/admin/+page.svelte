@@ -12,15 +12,15 @@
 
 	const when = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-	async function review(id: string, name: string, action: ReviewAction) {
-		if (action === 'delete' && !confirm(`Delete ${name} for good, pictures and all?`)) return;
+	/** Posts an admin action for the character card `id`, then reloads the list. */
+	async function post(id: string, path: string, body: object) {
 		busy = id;
 		error = null;
 		try {
-			const response = await fetch(`/api/admin/characters/${id}/review`, {
+			const response = await fetch(path, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ action })
+				body: JSON.stringify(body)
 			});
 			if (!response.ok) throw new Error(await apiErrorMessage(response));
 			await invalidateAll();
@@ -29,6 +29,26 @@
 		} finally {
 			busy = null;
 		}
+	}
+
+	function review(id: string, name: string, action: ReviewAction) {
+		if (action === 'delete' && !confirm(`Delete ${name} for good, pictures and all?`)) return;
+		return post(id, `/api/admin/characters/${id}/review`, { action });
+	}
+
+	// Banning signs the author out everywhere and stops them signing in. "remove" also deletes
+	// every character they've shared, pictures and all; otherwise they're all hidden.
+	function ban(id: string, author: { id: string; name: string }, remove: boolean) {
+		const what = remove
+			? `Ban ${author.name} and delete every character they’ve shared, pictures and all? This can’t be undone.`
+			: `Ban ${author.name}? They’re signed out, can’t sign in again, and all their characters are hidden.`;
+		if (!confirm(what)) return;
+		return post(id, `/api/admin/users/${author.id}/ban`, { remove });
+	}
+
+	function unban(id: string, author: { id: string; name: string }) {
+		if (!confirm(`Let ${author.name} sign in again? Their characters stay hidden until you show them.`)) return;
+		return post(id, `/api/admin/users/${author.id}/unban`, {});
 	}
 </script>
 
@@ -61,6 +81,7 @@
 						<span class="text-small {character.hidden ? 'text-danger' : 'text-muted'}">
 							{character.hidden ? 'Hidden' : 'Still visible'}
 						</span>
+						{#if character.author_banned}<span class="text-small text-danger">Author banned</span>{/if}
 					</p>
 					<ul class="mt-3 space-y-2 text-small">
 						{#each reports as report, i (i)}
@@ -81,6 +102,20 @@
 						<button type="button" class={button('danger', 'sm')} disabled={busy === character.id} onclick={() => review(character.id, character.name, 'delete')}>
 							Delete
 						</button>
+					</div>
+					<div class="mt-3 flex flex-wrap gap-3">
+						{#if character.author_banned}
+							<button type="button" class={button('quiet', 'sm')} disabled={busy === character.id} onclick={() => unban(character.id, { id: character.author_id, name: character.author_name })}>
+								Unban {character.author_name}
+							</button>
+						{:else}
+							<button type="button" class={button('quiet', 'sm')} disabled={busy === character.id} onclick={() => ban(character.id, { id: character.author_id, name: character.author_name }, false)}>
+								Ban author
+							</button>
+							<button type="button" class={button('danger', 'sm')} disabled={busy === character.id} onclick={() => ban(character.id, { id: character.author_id, name: character.author_name }, true)}>
+								Ban and delete all their characters
+							</button>
+						{/if}
 					</div>
 					{#if error?.id === character.id}<p class="mt-3 text-small text-danger" role="alert">{error.message}</p>{/if}
 				</div>

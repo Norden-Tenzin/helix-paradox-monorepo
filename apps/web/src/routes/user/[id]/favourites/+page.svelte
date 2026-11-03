@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '#lib/components/Seo.svelte';
 	import CharacterGrid from '#lib/components/CharacterGrid.svelte';
 	import ProfileTabs from '#lib/components/ProfileTabs.svelte';
 	import type { PageProps } from './$types';
@@ -7,9 +8,8 @@
 	const total = $derived(data.characters.total);
 </script>
 
-<svelte:head>
-	<title>Your favourites · Helix Paradox</title>
-</svelte:head>
+<!-- Only its owner can see this list, so it's never in search results. -->
+<Seo title="Your favourites · Helix Paradox" noindex />
 
 <header class="wrap pt-16 pb-10 sm:pt-24">
 	<h1 class="text-head">Your favourites</h1>

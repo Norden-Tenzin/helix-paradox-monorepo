@@ -1,8 +1,10 @@
 <script lang="ts">
+	import Seo from '#lib/components/Seo.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { authClient } from '#lib/auth-client.ts';
 	import AuthShell from '#lib/components/AuthShell.svelte';
+	import Turnstile from '#lib/components/Turnstile.svelte';
 	import { safeRedirect } from '#lib/redirect.ts';
 	import { button, field, fieldLabel } from '#lib/ui.ts';
 
@@ -14,6 +16,9 @@
 	// After signing up, the account waits for its email to be confirmed.
 	let sentTo = $state('');
 	let resent = $state(false);
+	// The Turnstile check's token; the API refuses sign-up without one (auth.ts).
+	let captchaToken = $state('');
+	let turnstile = $state<ReturnType<typeof Turnstile>>();
 
 	const redirectTo = $derived(safeRedirect(page.url));
 	// The email's link signs them in and carries on to where they were going.
@@ -22,17 +27,26 @@
 	async function onSubmit(e: SubmitEvent) {
 		e.preventDefault();
 		error = '';
+		if (!captchaToken) {
+			error = 'Wait for the “are you a person” check to finish, then try again.';
+			return;
+		}
 		loading = true;
-		const result = await authClient.signUp.email({
-			email: email.trim(),
-			password,
-			name: username.trim(),
-			username: username.trim(),
-			callbackURL
-		});
+		const result = await authClient.signUp.email(
+			{
+				email: email.trim(),
+				password,
+				name: username.trim(),
+				username: username.trim(),
+				callbackURL
+			},
+			{ headers: { 'x-captcha-response': captchaToken } }
+		);
 		loading = false;
 		if (result.error) {
 			error = result.error.message ?? 'Sign up failed. Try again.';
+			// Each token works once, so a second try needs a new one.
+			turnstile?.reset();
 			return;
 		}
 		// Only reached if verification were ever switched off: a session already exists.
@@ -48,9 +62,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Create an account · Helix Paradox</title>
-</svelte:head>
+<Seo title="Create an account · Helix Paradox" noindex />
 
 {#if sentTo}
 	<AuthShell title="Check your inbox" intro="We’ve sent a link to {sentTo}. Open it to finish creating your account.">
@@ -100,10 +112,15 @@
 					class="{field} h-12"
 				/>
 			</div>
+			<Turnstile bind:this={turnstile} bind:token={captchaToken} action="sign-up" />
 			{#if error}<p class="text-small text-danger" role="alert">{error}</p>{/if}
 			<button type="submit" disabled={loading} class="{button('accent')} w-full">
 				{loading ? 'Creating your account…' : 'Create account'}
 			</button>
+			<p class="text-small text-muted">
+				By creating an account you agree to the <a href="/terms" class="link">terms and content rules</a>, and
+				that we store what the <a href="/privacy" class="link">privacy page</a> describes.
+			</p>
 			<p class="text-body">
 				Already have one?
 				<a href="/sign-in?redirect={encodeURIComponent(redirectTo)}" class="link">Sign in</a>

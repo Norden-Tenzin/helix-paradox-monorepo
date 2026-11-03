@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '#lib/components/Seo.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { authClient } from '#lib/auth-client.ts';
@@ -77,9 +78,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Sign in · Helix Paradox</title>
-</svelte:head>
+<Seo title="Sign in · Helix Paradox" noindex />
 
 <AuthShell title="Welcome back" intro="Sign in to share characters and look after the ones you’ve shared.">
 	<form onsubmit={onSubmit} class="space-y-6">

@@ -67,8 +67,8 @@ async function summaries(db: Db, rows: { id: string }[], viewer: string | null):
       .groupBy(collectionCharacters.collectionId),
     // The latest few per collection, numbered within each collection.
     db.all<{ id: string; image: string }>(sql`
-      select "collection_id" as "id", "display_image" as "image" from (
-        select cc."collection_id", c."display_image",
+      select "collection_id" as "id", "image" from (
+        select cc."collection_id", coalesce(c."thumb_image", c."display_image") as "image",
           row_number() over (partition by cc."collection_id" order by cc."added_at" desc) as n
         from "collection_characters" cc join "characters" c on c."id" = cc."character_id"
         where cc."collection_id" in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})

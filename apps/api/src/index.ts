@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import { createAuth } from "./auth";
 import type { AppEnv } from "./context";
 import { createDb } from "./db";
+import { rateLimit } from "./rate-limit";
 import { characterRoutes } from "./routes/characters";
 import { collectionRoutes } from "./routes/collections";
 import { discoverRoutes } from "./routes/discover";
@@ -11,11 +12,13 @@ import { imageRoutes } from "./routes/images";
 import { dnaRoutes, modRoutes } from "./routes/mods";
 import { tagRoutes } from "./routes/tags";
 import { adminRoutes } from "./routes/admin";
+import { sitemapRoutes } from "./routes/sitemap";
 import { userRoutes } from "./routes/users";
 
 const app = new Hono<AppEnv>().basePath("/api");
 
 app.use(logger());
+app.use(rateLimit);
 app.use(async (c, next) => {
   const db = createDb(c.env.DB);
   c.set("db", db);
@@ -34,6 +37,7 @@ app.route("/mods", modRoutes);
 app.route("/dna", dnaRoutes);
 app.route("/tags", tagRoutes);
 app.route("/admin", adminRoutes);
+app.route("/sitemap", sitemapRoutes);
 
 app.get("/health", (c) => c.json({ ok: true }));
 

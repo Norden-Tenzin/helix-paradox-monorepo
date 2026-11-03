@@ -50,6 +50,8 @@ export interface Character {
   updated_at: number;
   /** Browser-ready URL (relative /api/images/... for R2 objects). */
   display_image: string;
+  /** A small copy of display_image for cards; the same URL as display_image when there isn't one. */
+  thumb_image: string;
   grid_images: string[];
   mods: Mod[];
   tags: Tag[];
@@ -161,7 +163,15 @@ export interface Me {
 
 /** A character with open reports, and those reports, for review. */
 export interface ReportedCharacter {
-  character: { id: string; name: string; author_id: string; author_name: string; display_image: string; hidden: boolean };
+  character: {
+    id: string;
+    name: string;
+    author_id: string;
+    author_name: string;
+    author_banned: boolean;
+    display_image: string;
+    hidden: boolean;
+  };
   reports: { reason: ReportReason; note: string; reporter_name: string; created_at: number }[];
 }
 

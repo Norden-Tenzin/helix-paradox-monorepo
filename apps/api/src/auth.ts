@@ -1,8 +1,12 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { username } from "better-auth/plugins";
+import { APIError } from "better-auth/api";
+import { eq } from "drizzle-orm";
+import { captcha, username } from "better-auth/plugins";
 import type { Db } from "./db";
 import { schema } from "./db";
+import { user as users } from "./db/schema";
+import { deleteCharactersOf } from "./accounts";
 import { sendEmail, verificationEmail } from "./email";
 
 export function createAuth(env: Env, db: Db) {
@@ -31,10 +35,41 @@ export function createAuth(env: Env, db: Db) {
       cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
     user: {
-      // Read by requireAdmin; sign-up can't set it.
-      additionalFields: { role: { type: "string", defaultValue: "user", input: false } },
+      // "Delete my account" on /account, confirmed with the password. Everything they shared goes
+      // too: the pictures in R2 here, the rest by foreign keys cascading from the user row.
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (u) => {
+          await deleteCharactersOf(db, env.BUCKET, u.id);
+        },
+      },
+      additionalFields: {
+        // Read by requireAdmin; sign-up can't set it.
+        role: { type: "string", defaultValue: "user", input: false },
+        // Set by an admin (routes/admin.ts). A banned account can't sign in or change anything.
+        bannedAt: { type: "number", required: false, input: false },
+      },
     },
-    plugins: [username()],
+    databaseHooks: {
+      session: {
+        create: {
+          // Every sign-in makes a session, so this is where a banned account is turned away.
+          before: async (session) => {
+            const [row] = await db.select({ bannedAt: users.bannedAt }).from(users).where(eq(users.id, session.userId));
+            if (row?.bannedAt) throw new APIError("FORBIDDEN", { message: "This account has been banned." });
+          },
+        },
+      },
+    },
+    plugins: [
+      username(),
+      // Turnstile on sign-up, so scripts can't make accounts in bulk. The browser sends the
+      // widget's token as x-captcha-response (routes/sign-up). Without a secret (local dev without
+      // one in .dev.vars) the check is skipped.
+      ...(env.TURNSTILE_SECRET_KEY
+        ? [captcha({ provider: "cloudflare-turnstile", secretKey: env.TURNSTILE_SECRET_KEY, endpoints: ["/sign-up/email"] })]
+        : []),
+    ],
     advanced: {
       // The worker sits behind the SvelteKit proxy; trust its forwarded client IP for rate limiting.
       ipAddress: { ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"] },

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '#lib/components/Seo.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { Dices, RefreshCw } from '@lucide/svelte';
 	import { apiErrorMessage, type DiscoverPage } from '#lib/api.ts';
@@ -35,9 +36,10 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Discover · Helix Paradox</title>
-</svelte:head>
+<Seo
+	title="Discover CK3 characters · Helix Paradox"
+	description="Crusader Kings 3 characters picked for you, a batch at a time. Favourite the faces you like and see more like them."
+/>
 
 <header class="wrap flex flex-col gap-6 pt-16 pb-10 sm:flex-row sm:items-end sm:justify-between sm:pt-24">
 	<div>

@@ -1,3 +1,11 @@
-# allow crawling everything by default
+# Everything people would search for is open. The API is for the site itself, apart from the
+# pictures (so portraits can show in image search), and account pages have nothing to find.
 User-agent: *
-Disallow:
+Allow: /api/images/
+Disallow: /api/
+Disallow: /admin
+Disallow: /upload
+Disallow: /random
+Disallow: /account
+
+Sitemap: https://helixparadox.com/sitemap.xml

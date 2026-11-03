@@ -16,6 +16,9 @@ export const user = sqliteTable("user", {
   // "admin" can review reports and look after mods and tags (routes/admin.ts). Granted with
   // scripts/set-role.mts, never through sign-up (auth.ts marks it input: false).
   role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
+  // When an admin banned the account (routes/admin.ts), or null. Banned accounts can't sign in
+  // (auth.ts) and their sessions are deleted.
+  bannedAt: integer("banned_at"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
@@ -108,6 +111,10 @@ export const characters = sqliteTable(
     hiddenAt: integer("hidden_at"),
     // R2 object key, or an absolute URL for legacy images.
     displayImage: text("display_image").notNull(),
+    // A small copy of the portrait for cards and lists (about 800px wide), made by the upload
+    // page. Null for characters shared before thumbnails, and when the API is called directly;
+    // then the full portrait is shown. scripts/backfill-thumbs.mts fills old ones in.
+    thumbImage: text("thumb_image"),
     gridImages: text("grid_images", { mode: "json" }).$type<string[]>().notNull().default([]),
   },
   (t) => [
