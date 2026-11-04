@@ -1,4 +1,4 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { displayName, viewerId, type AppEnv } from "../context";
@@ -24,7 +24,12 @@ export const userRoutes = new Hono<AppEnv>()
     const isMe = (await viewerId(c)) === id;
     const [[found], [{ total }], [{ lists }]] = await Promise.all([
       c.var.db.select().from(user).where(eq(user.id, id)),
-      c.var.db.select({ total: count() }).from(characters).where(eq(characters.authorId, id)),
+      // Like the character lists, hidden characters count only for their owner, so a profile whose
+      // characters are all hidden (a banned account, say) reads as empty and isn't indexed.
+      c.var.db
+        .select({ total: count() })
+        .from(characters)
+        .where(and(eq(characters.authorId, id), isMe ? undefined : isNull(characters.hiddenAt))),
       c.var.db
         .select({ lists: count() })
         .from(collections)
